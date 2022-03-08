@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <script>
+      const vnode = {
+        tag: 'div',
+        props: {
+          onClick: () => {
+            console.log(123)
+            alert('测试')
+          },
+        },
+        children: '请点击',
+      }
+
+      // 接受俩个参数 vnode 虚拟dom, container装载虚拟dom的容器
+      function render(vnode, container) {
+        const el = document.createElement(vnode.tag)
+        if (vnode.props) {
+          for (const key in vnode.props) {
+            if (/^on/.test(key)) {
+              el.addEventListener(key.substr(2).toLowerCase(), vnode.props[key])
+            }
+          }
+        }
+
+        if (typeof vnode.children === 'string') {
+          const text = document.createTextNode(vnode.children)
+          el.appendChild(text)
+        } else if (Array.isArray(vnode.children)) {
+          vnode.children.forEach((element) => render(element, el))
+        }
+
+        container.appendChild(el)
+      }
+
+      render(vnode, document.body)
+    </script>
+  </body>
+</html>
