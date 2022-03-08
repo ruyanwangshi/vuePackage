@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <script>
+      function MyComponent() {
+        return {
+          tag: 'div',
+          props: {
+            onClick: () => alert('123'),
+          },
+          children: '按钮组件',
+        }
+      }
+      const vnode = {
+        tag: MyComponent,
+      }
+
+      render(vnode, document.body)
+
+      function render(vnode, container) {
+        if (typeof vnode.tag === 'function') {
+          mountComponent(vnode, container)
+        } else {
+          mountElement(vnode, container)
+        }
+      }
+
+      function mountComponent(vnode, container) {
+        const subtree = vnode.tag()
+        render(subtree, container)
+      }
+
+      function mountElement(vnode, container) {
+        const el = document.createElement(vnode.tag)
+        for (const key in vnode.props) {
+          if (/^on/.test(key)) {
+            el.addEventListener(key.substr(2).toLowerCase(), vnode.props[key])
+          }
+        }
+        if (typeof vnode.children === 'string') {
+          const text = document.createTextNode(vnode.children)
+          el.appendChild(text)
+        } else if (Array.isArray(vnode.children)) {
+          vnode.children.forEach((element) => render(element, el))
+        }
+        container.appendChild(el)
+      }
+    </script>
+  </body>
+</html>
