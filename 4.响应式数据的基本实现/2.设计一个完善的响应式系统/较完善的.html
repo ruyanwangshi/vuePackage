@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <script>
+      const data = { text: '测试文本' }
+      // 存储副作用函数的桶
+      const bucket = new WeakMap()
+
+      // 记录当前获取到的副作用函数
+      let effectEvent = null
+      const obj = new Proxy(data, {
+        get(target, key) {
+          track(target, key)
+          return target[key]
+        },
+        set(target, key, value) {
+          target[key] = value
+          trigger(target, key)
+          return true
+        },
+      })
+
+      console.log(data.text)
+
+      // 在get函数拦截函数内调用track函数追踪变化
+      function track(target, key) {
+        // 如果没有当前的副作用函数直接 return
+        if (!effectEvent) return
+        // 根据target从“桶”中取得depsMap,它也是一个Map类型：key --> effects
+        let depsMap = bucket.get(target)
+        if (!depsMap) {
+          // 如果不存在depsMap，那么新建一个Map并于target关联
+          bucket.set(target, (depsMap = new Map()))
+        }
+        // 再根据key从depsMap中取得deps，它是一个Set类型
+        // 里面存储着所有与当前关联的副作用函数：effects
+        let deps = depsMap.get(key)
+        if (!deps) {
+          // 如果deps不存在，那么新建一个Set并于key关联
+          depsMap.set(key, (deps = new Set()))
+        }
+        // 最后将当前激活的副作用函数添加到“桶”里
+        deps.add(effectEvent)
+      }
+
+      // 在set拦截函数内调用trigger函数出发变化
+      function trigger(target, key) {
+        // 根据target从桶中取得depsMap,它是key --> effects
+        const depsMap = bucket.get(target)
+        if (!depsMap) return true
+        // 再根据key取得所有副作用函数effects
+        const deps = depsMap.get(key)
+        if (!deps) return true
+        // 执行所有副作用函数
+        deps.forEach((fn) => fn())
+      }
+
+      function effect(fn) {
+        effectEvent = fn // 先获取副作用函数
+        fn() // 执行一次出发get记录
+      }
+
+      effect(() => {
+        console.log('effect run')
+        document.body.innerText = obj.text
+      })
+
+      setTimeout(() => {
+        console.log('执行了obj.text副作用函数')
+        obj.text = 'text内容'
+      }, 1000)
+
+      setTimeout(() => {
+        console.log('执行了obj.name副作用函数')
+        obj.name = 'name内容'
+      }, 2000)
+    </script>
+  </body>
+</html>

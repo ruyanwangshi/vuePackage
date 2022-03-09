@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <script>
+      const data = { text: '测试文本' }
+      const bucket = new Set() // 副作用函数桶列表
+      let effectEvent = null // 记录当前获取到的副作用函数
+      const obj = new Proxy(data, {
+        get(target, key) {
+          bucket.add(effectEvent)
+          return target[key]
+        },
+        set(target, key, value) {
+          target[key] = value
+          bucket.forEach((fn) => fn())
+          return true
+        },
+      })
+
+      function effect(fn) {
+        effectEvent = fn // 先获取副作用函数
+        fn() // 执行一次出发get记录
+      }
+
+      effect(() => {
+        console.log('effect run')
+        document.body.innerText = obj.text
+      })
+
+      // 副作用函数并没有依赖name 但副作用函数还是执行了
+      setTimeout(() => {
+        console.log('执行了obj.text副作用函数')
+        obj.text = 'name内容'
+      }, 1000)
+
+      // 副作用函数并没有依赖name 但副作用函数还是执行了
+      setTimeout(() => {
+        console.log('执行了obj.name副作用函数')
+        obj.name = '测试内容'
+      }, 1000)
+    </script>
+  </body>
+</html>

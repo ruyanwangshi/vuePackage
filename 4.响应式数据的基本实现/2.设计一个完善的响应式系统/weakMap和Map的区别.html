@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <script>
+      const map = new Map()
+      const weakmap = new WeakMap()
+      ;(function () {
+        const foo = { foo: 1 }
+        const bar = { bar: 2 }
+        map.set(foo, 1)
+        weakmap.set(bar, 2)
+      })()
+      setTimeout(() => {
+        console.log(map)
+        console.log(weakmap)
+      }, 60000)
+    </script>
+  </body>
+</html>
