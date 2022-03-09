@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <script>
+      const data = {
+        name: '内容',
+      }
+
+      let handlerEvent = null
+      //   const bucket = new Set()
+      const bucket = new Map()
+
+      const obj = new Proxy(data, {
+        get(target, property, receiver) {
+          if (bucket.has(property)) {
+            bucket.get(property).add(handlerEvent)
+          } else {
+            const stuck = new Set()
+            stuck.add(handlerEvent)
+            bucket.set(property, stuck)
+          }
+          return target[property]
+        },
+        set(target, prop, value, receiver) {
+          target[prop] = value
+          bucket.get(prop).forEach((fn) => fn())
+          return true
+        },
+      })
+
+      function effect(fn) {
+        if (typeof fn === 'function') {
+          handlerEvent = fn
+          fn()
+        }
+      }
+
+      effect(() => {
+        document.body.innerHTML = obj.name
+      })
+
+      setTimeout(() => {
+        obj.name = '测试'
+      }, 2000)
+    </script>
+  </body>
+</html>
