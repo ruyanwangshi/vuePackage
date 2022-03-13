@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <script>
+      const data = { text: '测试文本', name: '测试名称', flag: true }
+      // 全局变量
+      let temp1, temp2
+
+      const bucket = new WeakMap()
+      let effectEvent
+      const obj = new Proxy(data, {
+        get(traget, key) {
+          track(traget, key)
+          return traget[key]
+        },
+        set(traget, key, value) {
+          traget[key] = value
+          trigger(traget, key)
+          return true
+        },
+      })
+
+      function track(traget, key) {
+        if (!effectEvent) return
+        let depsMap = bucket.get(traget)
+        if (!depsMap) {
+          bucket.set(traget, (depsMap = new Map()))
+        }
+        let deps = depsMap.get(key)
+        if (!deps) {
+          depsMap.set(key, (deps = new Set()))
+        }
+        deps.add(effectEvent)
+        effectEvent.deps.push(deps)
+      }
+
+      function trigger(traget, key) {
+        const depsMap = bucket.get(traget)
+        if (!depsMap) return
+        const deps = depsMap.get(key)
+        const depsToRun = new Set(deps)
+        depsToRun.forEach((fn) => fn())
+      }
+
+      function effect(fn) {
+        const effectFn = () => {
+          cleanup(effectFn)
+          effectEvent = effectFn
+          fn()
+        }
+        effectFn.deps = []
+        effectFn()
+      }
+
+      function cleanup(effectFn) {
+        const deps = effectFn.deps
+        for (let i = 0; i < deps.length; i += 1) {
+          deps[i].delete(effectFn)
+        }
+        effectFn.deps.length = 0
+      }
+
+      effect(function effectFn1() {
+        console.log('effect run1')
+        effect(function effectFn2() {
+          console.log('effect run2')
+          temp2 = obj.text
+        })
+        temp1 = obj.text
+      })
+
+      setTimeout(() => {
+        obj.text = '内容添加'
+      }, 1000)
+    </script>
+  </body>
+</html>

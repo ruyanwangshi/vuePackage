@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <script>
+      const set = new Set([1])
+      let index = 0
+      setTimeout(() => {
+        set.forEach((item) => {
+          if (index < 1000) {
+            set.delete(1) // 如果先删除，然后在添加会进入死循环
+            set.add(1)
+          }
+          index++
+          console.log('函数执行中')
+        })
+      }, 2000)
+    </script>
+  </body>
+</html>

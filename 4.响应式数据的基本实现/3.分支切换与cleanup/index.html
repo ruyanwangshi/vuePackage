@@ -17,6 +17,7 @@
       const obj = new Proxy(data, {
         get(target, key) {
           track(target, key)
+          console.log('执行了get函数=>', key)
           return target[key]
         },
         set(target, key, value) {
@@ -57,8 +58,10 @@
         // 再根据key取得所有副作用函数effects
         const deps = depsMap.get(key)
         if (!deps) return true
+        // 解决Set对象如果在for循环中先删除然后再新增会出现死循环的问题
+        const effectToRun = new Set(deps)
         // 执行所有副作用函数
-        deps.forEach((fn) => fn())
+        effectToRun.forEach((fn) => fn())
       }
 
       function effect(fn) {
@@ -85,10 +88,10 @@
         document.body.innerText = obj.flag ? obj.text : 'not'
       })
       obj.flag = false
-      effect(() => {
-        console.log('effect run2')
-        document.body.innerText = obj.flag ? obj.text : 'not'
-      })
+      // effect(() => {
+      //   console.log('effect run2')
+      //   document.body.innerText = obj.flag ? obj.text : 'not'
+      // })
     </script>
   </body>
 </html>
