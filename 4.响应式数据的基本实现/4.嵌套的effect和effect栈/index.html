@@ -13,7 +13,10 @@
       let temp1, temp2
 
       const bucket = new WeakMap()
-      let effectEvent
+      // 副作用函数存储变量
+      let activeEffect
+      // 副作用函数栈
+      const effectStack = []
       const obj = new Proxy(data, {
         get(traget, key) {
           track(traget, key)
@@ -27,7 +30,7 @@
       })
 
       function track(traget, key) {
-        if (!effectEvent) return
+        if (!activeEffect) return
         let depsMap = bucket.get(traget)
         if (!depsMap) {
           bucket.set(traget, (depsMap = new Map()))
@@ -36,8 +39,8 @@
         if (!deps) {
           depsMap.set(key, (deps = new Set()))
         }
-        deps.add(effectEvent)
-        effectEvent.deps.push(deps)
+        deps.add(activeEffect)
+        activeEffect.deps.push(deps)
       }
 
       function trigger(traget, key) {
@@ -51,8 +54,14 @@
       function effect(fn) {
         const effectFn = () => {
           cleanup(effectFn)
-          effectEvent = effectFn
-          fn()
+          // 当调用effect注册副作用函数时，将副作用函数赋值给activeEffect
+          activeEffect = effectFn
+          // 在调用副作用函数之前将当前副作用函数压入栈中
+          effectStack.push(effectFn)
+          fn() 
+          // 当前副作用函数执行完毕后，将当前副作用函数弹出栈，并把activeEffect还原为之前的副作用函数
+          effectStack.pop()
+          activeEffect = effectStack[effectStack.length - 1]
         }
         effectFn.deps = []
         effectFn()
@@ -70,13 +79,13 @@
         console.log('effect run1')
         effect(function effectFn2() {
           console.log('effect run2')
-          temp2 = obj.text
+          temp2 = obj.name
         })
         temp1 = obj.text
       })
 
       setTimeout(() => {
-        obj.text = '内容添加'
+        obj.name = '内容添加'
       }, 1000)
     </script>
   </body>
