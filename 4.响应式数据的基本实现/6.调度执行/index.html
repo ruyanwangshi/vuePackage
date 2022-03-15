@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <script>
+        const data = { text: '测试文本', flag: true, count: 0 }
+        const bucket = new WeakMap()
+
+        let activeEffect
+        let temp1, temp2
+        const effectStack = []
+        const obj = new Proxy(data, {
+            get (target, key) {
+                track(target, key)
+                return target[key]
+            },
+            set (target, key, value) {
+                target[key] = value
+                trigger(target, key)
+            }
+        })
+
+        function track (target, key) {
+            if (!activeEffect) return
+            let depsMap = bucket.get(target)
+            if (!depsMap) {
+                bucket.set(target, (depsMap = new Map()))
+            }
+            let deps = depsMap.get(key)
+            if (!deps) {
+                depsMap.set(key, (deps = new Set()))
+            }
+            deps.add(activeEffect)
+            activeEffect.deps.push(deps)
+        }
+
+        function trigger (target, key) {
+            const depsMap = bucket.get(target)
+            if (!depsMap) return true
+            const deps = depsMap.get(key)
+            const effectToRun = new Set()
+            deps && deps.forEach(effectFn => {
+                if(effectFn !== activeEffect) {
+                    effectToRun.add(effectFn)
+                }
+            })
+            effectToRun && effectToRun.forEach(fn => {
+              if(fn.options.scheduler && typeof fn.options.scheduler === 'function') {
+                fn.options.scheduler(fn)
+              } else {
+                fn()
+              }
+            });
+            // deps && deps.forEach(fn => fn());
+        }
+
+        function effect (fn, options = {}) {
+            const effectFn = () => {
+                cleanup(effectFn)
+                effectStack.push(effectFn)
+                activeEffect = effectFn
+                fn()
+                effectStack.pop()
+                activeEffect = effectStack[effectStack.length - 1]
+            }
+            effectFn.options = options
+            effectFn.deps = []
+            effectFn()
+        }
+
+        function cleanup (effectFn) {
+            for (let i = 0; i < effectFn.deps.length; i += 1) {
+                const deps = effectFn.deps[i]
+                deps.delete(activeEffect)
+            }
+            effectFn.deps.length = 0
+        }
+
+        // 使用调度器改变执行时机
+        // 0, 1, '结束了' 
+        // 0, '结束了'， 1
+
+        // effect(() => {
+        //     console.log(obj.count)
+        // }, {
+        //   scheduler(fn) {
+        //     setTimeout(fn)
+        //   }
+        // })
+
+        // obj.count++
+        // console.log('结束了')
+
+        // 使用调度器求最终结果
+        // 1, 2, 3
+        // 1, 3
+        const jobQueue = new Set()
+        const p  = Promise.resolve()
+        let isFlushing = false
+        function flushJob() {
+          if(isFlushing) return 
+          isFlushing = true
+          p.then(() => {
+            jobQueue.forEach(job => job())
+          }).finally(() => {
+            isFlushing = false
+          })
+        }
+        effect(() => {
+          console.log(obj.count)
+        },{
+          scheduler(fn) {
+            jobQueue.add(fn)
+            flushJob()
+          }
+        })
+        obj.count++
+        obj.count++
+        
+
+    </script>
+</body>
+
+</html>
