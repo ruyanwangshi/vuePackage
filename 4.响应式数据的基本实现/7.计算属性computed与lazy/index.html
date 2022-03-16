@@ -64,9 +64,11 @@
           cleanup(effectFn)
           effectStack.push(effectFn)
           activeEffect = effectFn
+          // 将fn的执行结果存储到res中
           const res = fn()
           effectStack.pop()
           activeEffect = effectStack[effectStack.length - 1]
+          // 将 res 作为 effectFn 函数的返回值
           return res
         }
         effectFn.options = options
@@ -91,22 +93,36 @@
       //   console.log(effectFn())
 
       function computed(getter) {
+        // value用来缓存上一次计算的值
         let value
+        // dirty标志，用来标识是否需要重新计算值，为true则意味着“脏”，需要计算
         let dirty = true
 
+        // 将getter作为副作用函数，创建一个lazy的effectFn
         const effectFn = effect(getter, {
           lazy: true,
+          // 添加调度器，在调度器中将dirty重置为true
           scheduler() {
-              dirty = true
+              if(!dirty) {
+                // 先执行dirty赋值为true然后在执行副作用函数，因为副作用函数：obj.value会执行,
+                // 但是如果不先把dirty赋值为true的话会导致里面副作用函数无法进行重新赋值，就是传入的getter函数
+                dirty = true
+                // 当计算属性以来的响应式数据发生数据变化的时候，手动调用trigger函数触发响应
+                trigger(obj,'value')
+              }
           }
         })
 
         const obj = {
+          // 当读取 value 时才执行effectFn
           get value() {
+            // 只有“脏”时才计算值，并将得到的值缓存到value中。
             if (dirty) {
               value = effectFn()
               dirty = false
             }
+            // 当读取value时，手动调用track函数执行副作用函数依赖追踪
+            track(obj,'value')
             return value
           },
         }
@@ -115,9 +131,12 @@
       }
 
       const foo = computed(() => obj.text + obj.name)
-      console.log(foo.value)
-      obj.name = '123'
-      console.log(foo.value)
+      // console.log(foo.value)
+      effect(() => {
+        console.log('执行了')
+        console.log(foo.value)
+      })
+      obj.text = '测试123'
     </script>
   </body>
 </html>
