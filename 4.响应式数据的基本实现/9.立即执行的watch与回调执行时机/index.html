@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <script>
+      const data = { text: '测试内容', flag: true, count: 1 }
+      const bucket = new WeakMap()
+      const effectStack = []
+      let activeEffect
+      let tem1, tem2
+      const obj = new Proxy(data, {
+        get(target, key) {
+          track(target, key)
+          return target[key]
+        },
+        set(target, key, value) {
+          target[key] = value
+          trigger(target, key)
+        },
+      })
+
+      function track(target, key) {
+        if (!activeEffect) return
+        let depsMap = bucket.get(target)
+        if (!depsMap) {
+          bucket.set(target, (depsMap = new Map()))
+        }
+        let deps = depsMap.get(key)
+        if (!deps) {
+          depsMap.set(key, (deps = new Set()))
+        }
+        deps.add(activeEffect)
+        activeEffect.deps.push(deps)
+      }
+
+      function trigger(target, key) {
+        const depsMap = bucket.get(target)
+        if (!depsMap) return true
+        const deps = depsMap.get(key)
+        if (!deps) return true
+        const effectToRun = new Set()
+        deps.forEach((effectFn) => {
+          if (effectFn !== activeEffect) {
+            effectToRun.add(effectFn)
+          }
+        })
+        effectToRun &&
+          effectToRun.forEach((effectFn) => {
+            if (effectFn.options.schudler) {
+              effectFn.options.schudler(effectFn)
+            } else {
+              effectFn()
+            }
+          })
+      }
+      function effect(fn, options = {}) {
+        const effectFn = () => {
+          cleaup(effectFn)
+          effectStack.push(effectFn)
+          activeEffect = effectFn
+          const res = fn()
+          effectStack.pop()
+          activeEffect = effectStack[effectStack.length - 1]
+          return res
+        }
+        effectFn.options = options
+        effectFn.deps = []
+        if (!options.lazy) {
+          effectFn()
+        }
+        return effectFn
+      }
+
+      function cleaup(effectFn) {
+        for (let i = 0; i < effectFn.deps.length; i += 1) {
+          const deps = effectFn.deps[i]
+          deps.delete(effectFn)
+        }
+        effectFn.deps.length = 0
+      }
+
+      const effectFn = effect(
+        () => {
+          console.log(obj.count)
+        },
+        {
+          lazy: true,
+          schudler(fn) {
+            setTimeout(fn)
+          },
+        }
+      )
+
+      function watch(source, cb, options = {}) {
+        let getter
+        if (typeof source === 'function') {
+          getter = source
+        } else {
+          getter = () => traverse(source)
+        }
+        let newValue, oldValue
+        const job = () => {
+          newValue = effectFn()
+          cb(newValue, oldValue)
+          oldValue = newValue
+        }
+        const effectFn = effect(() => getter(), {
+          lazy: true,
+          schudler: () => {
+              // 在调度函数中判断flush是否为'post',如果是，将其放入微任务队列中
+              if(options.flush === 'post') {
+                queueMicrotask(job)
+              } else {
+                job()
+              }
+          },
+        })
+        // 当immediate为true的时候立即执行watch回调函数
+        if (options.immediate) {
+          job()
+        } else {
+          oldValue = effectFn()
+        }
+      }
+
+      function traverse(value, seen = new Set()) {
+        if (typeof value !== 'object' || value === null || seen.has(seen)) return
+
+        for (const key in value) {
+          traverse(value[key], seen)
+        }
+      }
+
+      watch(
+        () => obj.flag,
+        (newValue, oldValue) => {
+          console.log(newValue, oldValue)
+        },
+        {
+          immediate: true,
+          flush: 'post' // 'pre' | 'sync' | 'post'
+          // 'pre' 渲染之前执行
+          // 'sync' 同步执行
+          // 'post' 渲染之后执行
+        }
+      )
+      queueMicrotask(() => {
+        console.log(1)
+      })
+      
+      obj.flag = 123
+    </script>
+  </body>
+</html>

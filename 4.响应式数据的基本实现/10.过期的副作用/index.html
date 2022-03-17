@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <script>
+      const data = { text: '测试内容', count: 1 }
+      const bucket = new WeakMap()
+      const effectStack = []
+      let activeEffect
+      let temp1, temp2
+      const obj = new Proxy(data, {
+        get(target, key) {
+          track(target, key)
+          return target[key]
+        },
+        set(target, key, value) {
+          target[key] = value
+          trigger(target, key, value)
+        },
+      })
+
+      function track(target, key) {
+        if (!activeEffect) return
+        let depsMap = bucket.get(target)
+        if (!depsMap) {
+          bucket.set(target, (depsMap = new Map()))
+        }
+        let deps = depsMap.get(key)
+        if (!deps) {
+          depsMap.set(key, (deps = new Set()))
+        }
+        deps.add(activeEffect)
+        activeEffect.deps.push(deps)
+      }
+
+      function trigger(target, key, value) {
+        const depsMap = bucket.get(target)
+        if (!depsMap) return
+        const deps = depsMap.get(key)
+        const effectToRun = new Set()
+        deps &&
+          deps.forEach((effect) => {
+            if (effect !== activeEffect) {
+              effectToRun.add(effect)
+            }
+          })
+        effectToRun &&
+          effectToRun.forEach((effect) => {
+            if (effect.options.schudler) {
+              effect.options.schudler(effect)
+            } else {
+              effect()
+            }
+          })
+      }
+
+      function effect(fn, options = {}) {
+        const effectFn = () => {
+          cleanup(effectFn)
+          effectStack.push(effectFn)
+          activeEffect = effectFn
+          const res = fn()
+          effectStack.pop()
+          activeEffect = effectStack[effectStack.length - 1]
+          return res
+        }
+        effectFn.options = options
+        effectFn.deps = []
+        if (!options.lazy) {
+          effectFn()
+        }
+        return effectFn
+      }
+
+      function cleanup(effect) {
+        for (let i = 0; i < effect.deps.length; i += 1) {
+          const deps = effect.deps[i]
+          deps.delete(effect)
+        }
+        effect.deps.length = 0
+      }
+
+      function watch(source, cb, options = {}) {
+        let getter
+        if (typeof source === 'function') {
+          getter = source
+        } else {
+          getter = () => traverse(source)
+        }
+
+        let clean
+        function onInvalidate(fn) {
+          // 将过期的回调存储到cleanup中
+          clean = fn
+        }
+
+        const job = () => {
+          newValue = effectFn()
+          // 在调用回调函数cb之前，先调用过期回调
+          if (typeof clean === 'function') {
+            clean()
+          }
+          // 将onInvalidate作为回调函数的第三个参数，以便用户使用
+          cb(oldValue, newValue, onInvalidate)
+          oldValue = newValue
+        }
+
+        let oldValue, newValue
+        const effectFn = effect(() => getter(), {
+          lazy: true,
+          schudler: () => {
+            if (options.flush === 'post') {
+              queueMicrotask(job)
+            } else {
+              job()
+            }
+          },
+        })
+
+        if (options.immediate) {
+          job()
+        } else {
+          oldValue = effectFn()
+        }
+      }
+
+      function traverse(value, seen = new Set()) {
+        if (typeof value !== 'object' || value === null || seen.has(value)) return
+        for (const key in value) {
+          traverse(value[key], seen)
+        }
+      }
+
+      let index = 1
+
+      const p1 = function (i) {
+        return new Promise((res) => {
+          setTimeout(() => {
+            res(123 + i)
+          }, 1000 / index)
+        })
+      }
+
+      watch(
+        () => obj.text,
+        async (oldValue, newValue, onInvalidate) => {
+          let expired = false
+          index++
+          onInvalidate(() => {
+            expired = true
+          })
+          const result = await p1(index)
+          if (!expired) {
+            console.log(result)
+          }
+        }
+      )
+      debugger
+      obj.text = 123
+      obj.text = 456
+    </script>
+  </body>
+</html>

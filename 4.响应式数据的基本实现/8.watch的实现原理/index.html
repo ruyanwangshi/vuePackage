@@ -44,11 +44,12 @@
         if (!depsMap) return true
         const deps = depsMap.get(key)
         const effectToRun = new Set()
-        deps.forEach((effectFn) => {
-          if (effectFn !== activeEffect) {
-            effectToRun.add(effectFn)
-          }
-        })
+        deps &&
+          deps.forEach((effectFn) => {
+            if (effectFn !== activeEffect) {
+              effectToRun.add(effectFn)
+            }
+          })
         effectToRun &&
           effectToRun.forEach((effectFn) => {
             if (effectFn.options.schudler) {
@@ -86,27 +87,63 @@
       }
 
       function watch(source, cb) {
-        effect(() => traverse(source), {
+        let getter
+        if (typeof source === 'function') {
+          getter = source
+        } else {
+          getter = () => traverse(source)
+        }
+        // 定义旧值和新值
+        let newValue, oldValue
+        // 使用effect注册副作用函数时，开启lazy选项，并把返回值存储到effectFn中以便后续手动调用
+        const effectFn = effect(
+          // 触发getter，从而建立联系
+          () => getter(), 
+          // 回调函数，执行时机在调度器里面执行
+          {
+          lazy: true,
           schudler() {
-            cb()
+            // 在schudler中手动调用effectFn函数获取到的就是新值
+            newValue = effectFn()
+            // 将旧值和新值作为回调函数的参数
+            cb(newValue, oldValue)
+            // 更新旧值，不然下一次会得到错误的旧值
+            oldValue = newValue
           },
         })
+        // 在调度器外直接调用effectFn函数，获取到的就是旧值
+        oldValue = effectFn()
       }
 
       function traverse(value, seen = new Set()) {
+        // 如果要读取的数据是原始值，或者已经被读取过了，那么什么都不做
         if (typeof value !== 'object' || value === null || seen.has(value)) return
+        // 将数据添加到seen中，代表遍历地读取过了，避免循环引用引起的死循环
         seen.add(value)
+        // 暂时不考虑数组等其他结构
+        // 假设value就是一个对象，使用for...in读取对象的每一个值，并递归地调用traverse
         for (const key in value) {
+          // 这个地方会 value[key] => obj[key] 会触发get函数，进行依赖收集
+          // 主要依靠这个地方出发get依赖收集
           traverse(value[key], seen)
         }
       }
 
-      watch(obj, () => {
-        console.log('执行了')
-      })
+      // watch(obj, () => {
+      //   console.log('执行了')
+      // })
+
+      watch(
+        () => obj.text,
+        (newValue, oldValue) => {
+          console.log(newValue, oldValue)
+        }
+      )
+
       setTimeout(() => {
+        // 触发set执行调度器，最主要的就是执行调度器
         obj.text = '测试'
-      })
+      }, 1000)
     </script>
   </body>
 </html>
