@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <script>
+        // 修改后的例子
+      const data = { 
+          name: '测试名称',
+          get foo() {
+              // 这个地方this是{name: 2} 而不是原target
+              console.log(this)
+              return this.name
+          }
+     }
+      const test = new Proxy(data, {
+        get(target, key, receiver) {
+          return Reflect.get(target, key, {name: 2})
+        }
+      })
+      console.log(test.bar) // 2
+
+      // 书上例子
+      const obj = {foo: 1}
+      console.log(Reflect.get(obj, 'foo', {foo: 2})) // 1 因为获取属性值没有使用属性描述符来获取属性值，无法改变this指向
+    </script>
+  </body>
+</html>
