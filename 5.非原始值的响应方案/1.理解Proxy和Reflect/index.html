@@ -6,27 +6,80 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Document</title>
   </head>
+
   <body>
     <script>
-        // 修改后的例子
-      const data = { 
-          name: '测试名称',
-          get foo() {
-              // 这个地方this是{name: 2} 而不是原target
-              console.log(this)
-              return this.name
-          }
-     }
+      // !有问题部分 start
+      // 修改后的例子
+      const data = {
+        foo: '测试名称',
+        get name() {
+          // 这个地方this是{name: 2} 而不是原target
+          console.log(this)
+          return this.foo
+        },
+      }
       const test = new Proxy(data, {
         get(target, key, receiver) {
-          return Reflect.get(target, key, {name: 2})
-        }
+          return Reflect.get(target, key, { foo: 2 })
+        },
       })
-      console.log(test.bar) // 2
+      console.log(test.name) // 2
 
       // 书上例子
-      const obj = {foo: 1}
-      console.log(Reflect.get(obj, 'foo', {foo: 2})) // 1 因为获取属性值没有使用属性描述符来获取属性值，无法改变this指向
+      const obj = { foo: 1 }
+      console.log(Reflect.get(obj, 'foo', { foo: 2 })) // 1 因为获取属性值没有使用属性描述符来获取属性值，无法改变this指向
+      // !有问题部分 end
+
+      const bucket = new WeakMap()
+      let activeEffect = null
+      {
+        const obj = {
+          foo: 1
+        }
+
+        const p = new Proxy(obj, {
+          get(target, key) {
+            track(target, key)
+            return target[key]
+          },
+          set(target, key, value, receiver) {
+            trigger(target, key)
+            target[key] = value
+          }
+        })
+      }
+
+      function track(target, key) {
+        let depMap = bucket.get(target)
+        if(!depMap) {
+          bucket.set(target, depMap = new Map())
+        }
+        let deps = depMap.get(key)
+        if(!deps) {
+          depMap.set(key, deps = new Set())
+        }
+
+        deps.add(activeEffect)
+
+        activeEffect.deps.push(deps)
+      }
+
+      function trigger(target, key) {
+        const depMap = bucket.get(target)
+        if(!depMap) return
+        const deps = depMap.get(key)
+        deps&& deps.forEach(fn => fn());
+      }
+
+      function effect(fn) {
+        const effectFn = () => {
+          activeEffect = effectFn
+          fn()
+        }
+        effectFn.dpes = []
+        effectFn()
+      }
     </script>
   </body>
 </html>
