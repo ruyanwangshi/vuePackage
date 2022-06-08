@@ -9,33 +9,36 @@
 
   <body>
     <script>
-      // !有问题部分 start
-      // 修改后的例子
-      const data = {
-        foo: '测试名称',
-        get name() {
-          // 这个地方this是{name: 2} 而不是原target
-          console.log(this)
-          return this.foo
-        },
-      }
-      const test = new Proxy(data, {
-        get(target, key, receiver) {
-          return Reflect.get(target, key, { foo: 2 })
-        },
-      })
-      console.log(test.name) // 2
+      function errorCode() {
+        // !有问题部分 start
+        // 修改后的例子
+        const data = {
+          foo: '测试名称',
+          get name() {
+            // 这个地方this是{name: 2} 而不是原target
+            console.log(this)
+            return this.foo
+          },
+        }
+        const test = new Proxy(data, {
+          get(target, key, receiver) {
+            return Reflect.get(target, key, { foo: 2 })
+          },
+        })
+        console.log(test.name) // 2
 
-      // 书上例子
-      const obj = { foo: 1 }
-      console.log(Reflect.get(obj, 'foo', { foo: 2 })) // 1 因为获取属性值没有使用属性描述符来获取属性值，无法改变this指向
-      // !有问题部分 end
+        // 书上例子
+        const obj = { foo: 1 }
+        console.log(Reflect.get(obj, 'foo', { foo: 2 })) // 1 因为获取属性值没有使用属性描述符来获取属性值，无法改变this指向
+        // !有问题部分 end
+      }
 
       const bucket = new WeakMap()
       let activeEffect = null
       {
         const obj = {
-          foo: 1
+          foo: 1,
+          flag: true
         }
 
         const p = new Proxy(obj, {
@@ -44,41 +47,60 @@
             return target[key]
           },
           set(target, key, value, receiver) {
-            trigger(target, key)
             target[key] = value
-          }
+            trigger(target, key)
+          },
         })
-      }
 
-      function track(target, key) {
-        let depMap = bucket.get(target)
-        if(!depMap) {
-          bucket.set(target, depMap = new Map())
+        function track(target, key) {
+          let depMap = bucket.get(target)
+          if (!depMap) {
+            bucket.set(target, (depMap = new Map()))
+          }
+          let deps = depMap.get(key)
+          if (!deps) {
+            depMap.set(key, (deps = new Set()))
+          }
+
+          deps.add(activeEffect)
+
+          activeEffect.deps.push(deps)
         }
-        let deps = depMap.get(key)
-        if(!deps) {
-          depMap.set(key, deps = new Set())
+
+        function trigger(target, key) {
+          const depMap = bucket.get(target)
+          if (!depMap) return
+          const deps = depMap.get(key)
+          deps && deps.forEach((fn) => fn())
+        }
+        debugger
+        function effect(fn) {
+          const effectFn = () => {
+            console.log('分隔符~~~~~~~~~~~1')
+            cleanup(effectFn, fn)
+            console.log('分隔符~~~~~~~~~~~2')
+            activeEffect = effectFn
+            fn()
+          }
+          effectFn.deps = []
+          effectFn()
         }
 
-        deps.add(activeEffect)
-
-        activeEffect.deps.push(deps)
-      }
-
-      function trigger(target, key) {
-        const depMap = bucket.get(target)
-        if(!depMap) return
-        const deps = depMap.get(key)
-        deps&& deps.forEach(fn => fn());
-      }
-
-      function effect(fn) {
-        const effectFn = () => {
-          activeEffect = effectFn
-          fn()
+        function cleanup(effectFn) {
+          const effectFnList = effectFn.deps
+          for(let i = 0;i<effectFnList.length; i++) {
+            console.log(effectFnList[i].has(effectFn))
+          }
+          effectFn.deps.length = 0
         }
-        effectFn.dpes = []
-        effectFn()
+
+        effect(() => {
+          document.body.innerHTML = p.flag ? p.foo : '内容'
+        })
+
+        setTimeout(() => {
+          p.flag = false
+        }, 2000)
       }
     </script>
   </body>
