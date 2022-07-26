@@ -1,32 +1,84 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Document</title>
-  </head>
-  <body>
-    <script>
-        // 修改后的例子
-      const data = { 
-          name: '测试名称',
-          get foo() {
-              // 这个地方this是{name: 2} 而不是原target
-              console.log(this)
-              return this.name
-          }
-     }
-      const test = new Proxy(data, {
-        get(target, key, receiver) {
-          return Reflect.get(target, key, {name: 2})
-        }
-      })
-      console.log(test.bar) // 2
+
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Document</title>
+</head>
+
+<body>
+  <script>
+    const bucket = new WeakMap()
+    const effectStack = []
+    let activeEffect = null
+    // 修改后的例子
+    const data = {
+      name: '测试名称',
+      get foo () {
+        // 这个地方this是{name: 2} 而不是原target
+        // console.log(this)
+        return this.name
+      }
+    }
+    const test = new Proxy(data, {
+      get (target, key, receiver) {
+        track(target, key)
+        // 里面得target 和 代理对象data是同一个对象
+        // 如果使用reflect函数改变get foo里面this，那么里面this指向还是原始对象data，导致改变name触发触发响应式
+        // return Reflect.get(target, key, receiver)
+        return target[key] // 这样改变name无法触发副作用函数
+      },
+      set (target, key, value, receiver) {
+        Reflect.set(target, key, value, receiver)
+        trigger(target, key)
+      }
+    })
+
+    function trigger (target, key) {
+      const depsMap = bucket.get(target)
+      if (!depsMap) return
+      const deps = depsMap.get(key)
+      if (!deps) return
+      deps.forEach(fn => fn());
+    }
+
+    function track (target, key) {
+      if (!activeEffect) return
+      let depsMap = bucket.get(target)
+      if (!depsMap) {
+        bucket.set(target, depsMap = new Map())
+      }
+      let deps = depsMap.get(key)
+      if (!deps) {
+        depsMap.set(key, deps = new Set())
+      }
+
+      deps.add(activeEffect);
+    }
+
+
+    function effect (fn) {
+      const effectFn = () => {
+        activeEffect = effectFn
+        fn()
+      }
+      effectFn()
+    }
+
+    effect(() => {
+      console.log('foo=>', test.foo)
+    })
+
+    test.name = 123
+
 
       // 书上例子
-      const obj = {foo: 1}
-      console.log(Reflect.get(obj, 'foo', {foo: 2})) // 1 因为获取属性值没有使用属性描述符来获取属性值，无法改变this指向
-    </script>
-  </body>
+      // const obj = {foo: 1}
+      // const obj1 = {foo: 2}
+      // console.log(Reflect.get(obj, 'foo', obj1)) // 1 因为获取属性值没有使用存取描述符来获取属性值，无法改变this指向
+  </script>
+</body>
+
 </html>
