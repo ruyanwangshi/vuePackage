@@ -26,9 +26,11 @@
       get (target, key, receiver) {
         track(target, key)
         // 里面得target 和 代理对象data是同一个对象
-        // 如果使用reflect函数改变get foo里面this，那么里面this指向还是原始对象data，导致改变name触发触发响应式
-        // return Reflect.get(target, key, receiver)
-        return target[key] // 这样改变name无法触发副作用函数
+        // 如果使用reflect函数改变get foo里面this，那么里面this指向还是原始对象data，导致改变name无法触发响应式
+        // console.log('target=>', key, target, receiver)
+        // 所以使用反射对象设置代理对象getter函数里面的this指向
+        return Reflect.get(target, key, receiver)
+        // return target[key] // 这样改变name无法触发副作用函数
       },
       set (target, key, value, receiver) {
         Reflect.set(target, key, value, receiver)
@@ -36,7 +38,7 @@
       }
     })
 
-    function trigger (target, key) {
+    function trigger(target, key) {
       const depsMap = bucket.get(target)
       if (!depsMap) return
       const deps = depsMap.get(key)
@@ -44,7 +46,7 @@
       deps.forEach(fn => fn());
     }
 
-    function track (target, key) {
+    function track(target, key) {
       if (!activeEffect) return
       let depsMap = bucket.get(target)
       if (!depsMap) {
@@ -54,7 +56,6 @@
       if (!deps) {
         depsMap.set(key, deps = new Set())
       }
-
       deps.add(activeEffect);
     }
 
