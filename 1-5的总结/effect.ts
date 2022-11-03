@@ -1,3 +1,6 @@
+// import { reactive } from './reactive'
+// import { readonly } from './readonly'
+
 type Effect = {
   (): any
   deps: Array<Set<() => any>>
@@ -17,38 +20,51 @@ const typeEvent = {
 
 type Valueof<O> = O[keyof O]
 
-
-
-
 // 创建代理对象
-export function createProxy<O extends object>(data: O, isShallow: boolean = false) {
+export function createProxy<O extends object>(data: O, isShallow: boolean = false, isReadonly = false) {
   return new Proxy<O>(data, {
     get(target: any, key: string, receiver: any) {
       // console.log('get=>', target)
       if (key === 'raw') {
         return target
       }
-      track(target, key)
+
+      // 只有在不是只读的情况下收集依赖项的副作用函数
+      if (!isReadonly) {
+        track(target, key)
+      }
+
       const res = Reflect.get(target, key, receiver)
+
+      // 是否开启浅代理
       if (isShallow) {
         return res
       }
-      // console.log(key)
+
       if (res !== null && typeof res === 'object') {
-        return createProxy(res)
+        // return isReadonly ? readonly(res) : reactive(res)
+        return createProxy(res, isShallow, isReadonly)
       }
       return res
-      // reactive(res)
     },
     set(target: any, key: string, newValue: any, receiver: any) {
+      // 只读属性是否开启
+      if (isReadonly) {
+        throw new Error(`该对象是只读，无法对属性  ${key}  值修改！`)
+      }
       const oldValue = target[key]
-      const type = Object.prototype.hasOwnProperty.call(target, key) ? typeEvent.set : typeEvent.add
+
+      const isArray = Array.isArray(target)
+
+      // 如果源对象属性上有该值那么就是设置，否则就是更新。
+      const type = isArray ? (Number(key) >= target.length ? typeEvent.add : typeEvent.set) : Object.prototype.hasOwnProperty.call(target, key) ? typeEvent.set : typeEvent.add
       const res = Reflect.set(target, key, newValue, receiver)
+
       // console.log(newValue)
       // 如果target对象与代理对象的原始对象相等那么执行副作用函数
       if (target === receiver.raw) {
-        if ((oldValue !== newValue && newValue === newValue) || oldValue === oldValue) {
-          trigger(target, key, type)
+        if (oldValue !== newValue && (newValue === newValue || oldValue === oldValue)) {
+          trigger(target, key, type, newValue)
         }
       }
 
@@ -60,7 +76,9 @@ export function createProxy<O extends object>(data: O, isShallow: boolean = fals
       return hadKey
     },
     deleteProperty(target, p) {
-      console.log('target=>', target, p)
+      if (isReadonly) {
+        throw new Error(`该属性是只读！${String(p)}`)
+      }
       const hadKey = Object.prototype.hasOwnProperty.call(target, p)
       const res = Reflect.deleteProperty(target, p)
       if (hadKey && res) {
@@ -68,8 +86,16 @@ export function createProxy<O extends object>(data: O, isShallow: boolean = fals
       }
       return res
     },
+    // 使用 for in循环的时候
     ownKeys(target) {
-      track(target, ITERATE_KEY)
+      // 需要区别一下是数组还是普通对象；
+      const isArray = Array.isArray(target)
+      if(isArray) {
+        track(target, 'length')
+      } else {
+        track(target, ITERATE_KEY)
+      }
+      
       const res = Reflect.ownKeys(target)
       return res
     },
@@ -95,13 +121,35 @@ export function track<T extends object, K = string>(target: T, key: K) {
 }
 
 // 副作用函数和代理对象执行函数
-export function trigger<T extends object, K = string>(target: T, key: K, type: Valueof<typeof typeEvent>) {
+export function trigger<T extends object, K = string>(target: T, key: K, type: Valueof<typeof typeEvent>, newValue?: any) {
   const depsMap = bucket.get(target)
   if (!depsMap) {
     return
   }
   const deps: Set<Effect> = depsMap.get(key)
   const effctFn: Set<Effect> = new Set()
+  if (Array.isArray(target)) {
+    if (type === typeEvent.add) {
+      const lengthEffect = depsMap.get('length')
+      lengthEffect &&
+        lengthEffect.forEach((fn) => {
+          if (fn !== activeEffect) {
+            effctFn.add(fn)
+          }
+        })
+    } else if (key === 'length') {
+      depsMap.forEach((item, key) => {
+        if (key >= newValue) {
+          item.forEach((fn) => {
+            if (fn !== activeEffect) {
+              effctFn.add(fn)
+            }
+          })
+        }
+      })
+    }
+  }
+
   // 在设置的时候把 for ... in 依赖的副作用函数取出来重新执行
   if (type === typeEvent.add || type === typeEvent.delete) {
     const InitialEffect = depsMap.get(ITERATE_KEY)
