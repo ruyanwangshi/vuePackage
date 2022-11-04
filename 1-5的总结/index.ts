@@ -2,23 +2,10 @@ import { effect } from './effect'
 import { reactive, shallowReactive } from './reactive'
 import { readonly, shallowReadonly } from './readonly'
 
-// const dataobj = {
-//   foo: {
-//     count: 0
-//   }
-// } as {
-//   [key: string]: any
-// }
-
-// const proto = {
-//   bar: {}
-// }
 
 
-
-
-const data = shallowReactive([1,2,3])
-// const data = readonly([1,2,3])
+// const data = shallowReactive([1,2,3])
+const data = reactive([])
 
 // const child = reactive(dataobj)
 // const parent = reactive(proto)
@@ -28,9 +15,11 @@ const data = shallowReactive([1,2,3])
 
 // 非原始值响应方式
 effect(() => {
-  for(const item in data){
-    console.log('item=>', item)
-  }
+  data.push(1)
+})
+
+effect(() => {
+  data.push(2)
 })
 
 
