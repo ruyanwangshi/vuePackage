@@ -1,5 +1,5 @@
-// import { reactive } from './reactive'
-// import { readonly } from './readonly'
+import { reactive } from './reactive'
+import { readonly } from './readonly'
 
 type Effect = {
   (): any
@@ -20,8 +20,10 @@ const typeEvent = {
 
 type Valueof<O> = O[keyof O]
 
+const reactiveMap = new Map();
+
 // 创建代理对象
-export function createProxy<O extends object>(data: O, isShallow: boolean = false, isReadonly = false) {
+export function createProxy<O extends object>(data: O, isShallow: boolean = false, isReadonly = false): O {
   return new Proxy<O>(data, {
     get(target: any, key: string, receiver: any) {
 
@@ -43,8 +45,8 @@ export function createProxy<O extends object>(data: O, isShallow: boolean = fals
       }
 
       if (res !== null && typeof res === 'object') {
-        // return isReadonly ? readonly(res) : reactive(res)
-        return createProxy(res, isShallow, isReadonly)
+        return isReadonly ? readonly(res) : reactive(res)
+        // return createProxy(res, isShallow, isReadonly)
       }
       return res
     },

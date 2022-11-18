@@ -5,7 +5,6 @@ import { readonly, shallowReadonly } from './readonly'
 
 
 // const data = shallowReactive([1,2,3])
-const data = reactive([1,2,3])
 
 // const child = reactive(dataobj)
 // const parent = reactive(proto)
@@ -14,9 +13,16 @@ const data = reactive([1,2,3])
 
 
 // 非原始值响应方式
-effect(() => {
-  console.log(data)
-})
+// effect(() => {
+//   console.log(data)
+// })
 
-data[4] = 1
-data.length = 1
+// data[4] = 1
+// data.length = 1
+
+// 这种会返回false
+{
+  const obj = {}
+  const data = reactive([obj])
+  console.log(data.includes(obj))
+}
