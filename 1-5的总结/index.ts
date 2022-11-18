@@ -5,7 +5,7 @@ import { readonly, shallowReadonly } from './readonly'
 
 
 // const data = shallowReactive([1,2,3])
-const data = reactive([])
+const data = reactive([1,2,3])
 
 // const child = reactive(dataobj)
 // const parent = reactive(proto)
@@ -15,13 +15,8 @@ const data = reactive([])
 
 // 非原始值响应方式
 effect(() => {
-  data.push(1)
+  console.log(data)
 })
 
-effect(() => {
-  data.push(2)
-})
-
-
-// data[3] = 1
+data[4] = 1
 data.length = 1
