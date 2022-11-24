@@ -43,7 +43,6 @@ export function createProxy<O extends object>(data: O, isShallow: boolean = fals
       if (key === 'raw') {
         return target
       }
-      console.log('收集到的key', key)
       if (arrayMethods[key]) {
         return Reflect.get(arrayMethods, key, receiver)
       }
@@ -63,11 +62,10 @@ export function createProxy<O extends object>(data: O, isShallow: boolean = fals
         return isReadonly ? readonly(res) : reactive(res)
         // return createProxy(res, isShallow, isReadonly)
       }
-      
+
       return res
     },
     set(target: any, key: string, newValue: any, receiver: any) {
-      console.log('设置到的key', key)
       // 只读属性是否开启
       if (isReadonly) {
         throw new Error(`该对象是只读，无法对属性  ${key}  值修改！`)
@@ -154,43 +152,83 @@ export function trigger<T extends object, K = string>(target: T, key: K, type?: 
   const deps: Set<Effect> = depsMap.get(key)
   const effctFn: Set<Effect> = new Set()
 
-  if (Array.isArray(target)) {
-    console.log('执行了添加add=>', type)
-    // 如果是数组，那么添加新元素的时候会隐式增长length属性
-    if (type === typeEvent.add) {
-      const lengthEffect = depsMap.get('length')
-      lengthEffect &&
-        lengthEffect.forEach((fn) => {
-          if (fn !== activeEffect) {
-            effctFn.add(fn)
-          }
-        })
-      // 如果key为length那么需要取出与length相关的所有副作用函数
-    } else if (key === 'length') {
-      depsMap.forEach((effects, key) => {
-        if (key === 'length') {
-          effects.forEach((fn) => {
-            if (fn !== activeEffect) {
-              effctFn.add(fn)
-            }
-          })
-        } else if (key >= newValue) {
-          effects.forEach((fn) => {
-            if (fn !== activeEffect) {
-              effctFn.add(fn)
-            }
-          })
-        }
-      })
-    }
-  } else {
-    deps &&
-      deps.forEach((fn) => {
+  deps &&
+    deps.forEach((fn) => {
+      if (fn !== activeEffect) {
+        effctFn.add(fn)
+      }
+    })
+
+  if (Array.isArray(target) && type === typeEvent.add) {
+    const lengthEffect = depsMap.get('length')
+    lengthEffect &&
+      lengthEffect.forEach((fn) => {
         if (fn !== activeEffect) {
           effctFn.add(fn)
         }
       })
   }
+
+  if (Array.isArray(target) && key === 'length') {
+    
+    depsMap.forEach((effects, key) => {
+      if (key >= newValue) {
+        effects.forEach((fn) => {
+          if (fn !== activeEffect) {
+            effctFn.add(fn)
+          }
+        })
+      }
+    })
+  }
+
+  // if (Array.isArray(target)) {
+  //   console.log('执行了添加add=>', type)
+  //   // 如果是数组，那么添加新元素的时候会隐式增长length属性
+  //   if (type === typeEvent.add) {
+  //     const lengthEffect = depsMap.get('length')
+  //     lengthEffect &&
+  //       lengthEffect.forEach((fn) => {
+  //         if (fn !== activeEffect) {
+  //           effctFn.add(fn)
+  //         }
+  //       })
+  //     // 如果key为length那么需要取出与length相关的所有副作用函数
+  //   } else if (key === 'length') {
+  //     depsMap.forEach((effects, key) => {
+  //       // if (key === 'length') {
+  //       //   effects.forEach((fn) => {
+  //       //     if (fn !== activeEffect) {
+  //       //       effctFn.add(fn)
+  //       //     }
+  //       //   })
+  //       // } else if (key >= newValue) {
+  //       //   effects.forEach((fn) => {
+  //       //     if (fn !== activeEffect) {
+  //       //       effctFn.add(fn)
+  //       //     }
+  //       //   })
+  //       // }
+
+  //       if (key >= newValue) {
+  //         effects.forEach((fn) => {
+  //           if (fn !== activeEffect) {
+  //             effctFn.add(fn)
+  //           }
+  //         })
+  //       }
+  //     })
+  //   }
+  // } else {
+  //   deps &&
+  //     deps.forEach((fn) => {
+  //       if (fn !== activeEffect) {
+  //         effctFn.add(fn)
+  //       }
+  //     })
+  // }
+
+
 
   // 在设置的时候把 for ... in 依赖的副作用函数取出来重新执行
   if (type === typeEvent.add || type === typeEvent.delete) {
