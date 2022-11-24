@@ -1,5 +1,5 @@
-// import { reactive } from './reactive'
-// import { readonly } from './readonly'
+import { reactive } from './reactive'
+import { readonly } from './readonly'
 
 type Effect = {
   (): any
@@ -20,34 +20,54 @@ const typeEvent = {
 
 type Valueof<O> = O[keyof O]
 
+
+// 映射数组方法，使includes、indexOf、lastIndexOf映射成正确的对象
+const arrayMethods = {}
+
+  ; (['includes', 'indexOf', 'lastIndexOf'] as const).forEach(key => {
+    arrayMethods[key] = function (...arg: any[]) {
+      const otherMethods = Array.prototype[key];
+      let res = otherMethods.call(this, ...arg);
+      if (res === false || res === '-1') {
+        res = otherMethods.call(this.raw, ...arg)
+      }
+      return res;
+    }
+
+  })
+
 // 创建代理对象
-export function createProxy<O extends object>(data: O, isShallow: boolean = false, isReadonly = false) {
+export function createProxy<O extends object>(data: O, isShallow: boolean = false, isReadonly = false): O {
   return new Proxy<O>(data, {
     get(target: any, key: string, receiver: any) {
-      // console.log('get=>', target)
       if (key === 'raw') {
         return target
       }
+      console.log('收集到的key', key)
+      if (arrayMethods[key]) {
+        return Reflect.get(arrayMethods, key, receiver)
+      }
 
-      // 只有在不是只读的情况下收集依赖项的副作用函数
-      if (!isReadonly) {
+      // 只有在不是只读的情况下收集依赖项的副作用函数,并且与内置的symbol不产生相关的绑定关系
+      if (!isReadonly && typeof key !== 'symbol') {
         track(target, key)
       }
 
       const res = Reflect.get(target, key, receiver)
-
       // 是否开启浅代理
       if (isShallow) {
         return res
       }
 
       if (res !== null && typeof res === 'object') {
-        // return isReadonly ? readonly(res) : reactive(res)
-        return createProxy(res, isShallow, isReadonly)
+        return isReadonly ? readonly(res) : reactive(res)
+        // return createProxy(res, isShallow, isReadonly)
       }
+      
       return res
     },
     set(target: any, key: string, newValue: any, receiver: any) {
+      console.log('设置到的key', key)
       // 只读属性是否开启
       if (isReadonly) {
         throw new Error(`该对象是只读，无法对属性  ${key}  值修改！`)
@@ -90,12 +110,15 @@ export function createProxy<O extends object>(data: O, isShallow: boolean = fals
     ownKeys(target) {
       // 需要区别一下是数组还是普通对象；
       const isArray = Array.isArray(target)
-      if(isArray) {
+
+      // 如果是数组则需要依赖length
+      if (isArray) {
         track(target, 'length')
       } else {
+        // 否则使用自己生成key
         track(target, ITERATE_KEY)
       }
-      
+
       const res = Reflect.ownKeys(target)
       return res
     },
@@ -104,9 +127,11 @@ export function createProxy<O extends object>(data: O, isShallow: boolean = fals
 
 // 收集副作用函数和代理对象之间的依赖
 export function track<T extends object, K = string>(target: T, key: K) {
+
   if (!activeEffect) {
     return
   }
+
   let depsMap = bucket.get(target)
   if (!depsMap) {
     bucket.set(target, (depsMap = new Map()))
@@ -116,19 +141,22 @@ export function track<T extends object, K = string>(target: T, key: K) {
     depsMap.set(key, (deps = new Set()))
   }
   deps.add(activeEffect)
-
   activeEffect.deps.push(deps)
 }
 
 // 副作用函数和代理对象执行函数
-export function trigger<T extends object, K = string>(target: T, key: K, type: Valueof<typeof typeEvent>, newValue?: any) {
+export function trigger<T extends object, K = string>(target: T, key: K, type?: Valueof<typeof typeEvent>, newValue?: any) {
   const depsMap = bucket.get(target)
+  // console.log('bucket=>', target, key)
   if (!depsMap) {
     return
   }
   const deps: Set<Effect> = depsMap.get(key)
   const effctFn: Set<Effect> = new Set()
+
   if (Array.isArray(target)) {
+    console.log('执行了添加add=>', type)
+    // 如果是数组，那么添加新元素的时候会隐式增长length属性
     if (type === typeEvent.add) {
       const lengthEffect = depsMap.get('length')
       lengthEffect &&
@@ -137,10 +165,17 @@ export function trigger<T extends object, K = string>(target: T, key: K, type: V
             effctFn.add(fn)
           }
         })
+      // 如果key为length那么需要取出与length相关的所有副作用函数
     } else if (key === 'length') {
-      depsMap.forEach((item, key) => {
-        if (key >= newValue) {
-          item.forEach((fn) => {
+      depsMap.forEach((effects, key) => {
+        if (key === 'length') {
+          effects.forEach((fn) => {
+            if (fn !== activeEffect) {
+              effctFn.add(fn)
+            }
+          })
+        } else if (key >= newValue) {
+          effects.forEach((fn) => {
             if (fn !== activeEffect) {
               effctFn.add(fn)
             }
@@ -148,6 +183,13 @@ export function trigger<T extends object, K = string>(target: T, key: K, type: V
         }
       })
     }
+  } else {
+    deps &&
+      deps.forEach((fn) => {
+        if (fn !== activeEffect) {
+          effctFn.add(fn)
+        }
+      })
   }
 
   // 在设置的时候把 for ... in 依赖的副作用函数取出来重新执行
@@ -160,12 +202,8 @@ export function trigger<T extends object, K = string>(target: T, key: K, type: V
         }
       })
   }
-  deps &&
-    deps.forEach((fn) => {
-      if (fn !== activeEffect) {
-        effctFn.add(fn)
-      }
-    })
+
+
   effctFn &&
     effctFn.forEach((fn: Effect) => {
       if (fn?.scheduler) {

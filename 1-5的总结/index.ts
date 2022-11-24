@@ -1,11 +1,11 @@
+// import { effect } from './effect'
 import { effect } from './effect'
-import { reactive, shallowReactive } from './reactive'
-import { readonly, shallowReadonly } from './readonly'
+import { reactive } from './reactive'
+// import { readonly, shallowReadonly } from './readonly'
 
 
 
 // const data = shallowReactive([1,2,3])
-const data = reactive([])
 
 // const child = reactive(dataobj)
 // const parent = reactive(proto)
@@ -14,14 +14,30 @@ const data = reactive([])
 
 
 // 非原始值响应方式
-effect(() => {
-  data.push(1)
-})
+// effect(() => {
+//   console.log(data)
+// })
 
-effect(() => {
-  data.push(2)
-})
+// data[4] = 1
+// data.length = 1
 
+// 这种会返回false
+// {
+//   const obj = {}
+//   const data = reactive([obj])
+//   console.log(data.includes(obj))
+// }
 
-// data[3] = 1
-data.length = 1
+// 测试数组方法隐式改变length属性
+{
+  // const arr = []
+  const arr = reactive([])
+  effect(() => {
+    console.log('第一个副作用函数')
+    arr.push(1)
+  })
+  effect(() => {
+    console.log('第二个副作用函数')
+    arr.push(1)
+  })
+}
