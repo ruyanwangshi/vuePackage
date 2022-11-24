@@ -1,6 +1,7 @@
+// import { effect } from './effect'
 import { effect } from './effect'
-import { reactive, shallowReactive } from './reactive'
-import { readonly, shallowReadonly } from './readonly'
+import { reactive } from './reactive'
+// import { readonly, shallowReadonly } from './readonly'
 
 
 
@@ -21,8 +22,22 @@ import { readonly, shallowReadonly } from './readonly'
 // data.length = 1
 
 // 这种会返回false
+// {
+//   const obj = {}
+//   const data = reactive([obj])
+//   console.log(data.includes(obj))
+// }
+
+// 测试数组方法隐式改变length属性
 {
-  const obj = {}
-  const data = reactive([obj])
-  console.log(data.includes(obj))
+  // const arr = []
+  const arr = reactive([])
+  effect(() => {
+    console.log('第一个副作用函数')
+    arr.push(1)
+  })
+  effect(() => {
+    console.log('第二个副作用函数')
+    arr.push(1)
+  })
 }
