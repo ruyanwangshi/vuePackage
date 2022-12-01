@@ -11,6 +11,7 @@ const bucket = new WeakMap()
 let activeEffect: Effect
 const effectStack: Effect[] = []
 const ITERATE_KEY = Symbol()
+const OBJECT_KEY = Symbol()
 
 const typeEvent = {
   set: 'set',
@@ -20,21 +21,102 @@ const typeEvent = {
 
 type Valueof<O> = O[keyof O]
 
-
 // 映射数组方法，使includes、indexOf、lastIndexOf映射成正确的对象
 const arrayMethods = {}
 
-  ; (['includes', 'indexOf', 'lastIndexOf'] as const).forEach(key => {
-    arrayMethods[key] = function (...arg: any[]) {
-      const otherMethods = Array.prototype[key];
-      let res = otherMethods.call(this, ...arg);
-      if (res === false || res === '-1') {
-        res = otherMethods.call(this.raw, ...arg)
-      }
-      return res;
-    }
+// 一个标记变量，代表是哦福进行追踪。默认为true，即允许追踪
+let shouldTrack = true
 
-  })
+;(['includes', 'indexOf', 'lastIndexOf'] as const).forEach((key) => {
+  arrayMethods[key] = function (...arg: any[]) {
+    const otherMethods = Array.prototype[key]
+    let res = otherMethods.call(this, ...arg)
+    if (res === false || res === '-1') {
+      res = otherMethods.call(this.raw, ...arg)
+    }
+    return res
+  }
+})
+;['push', 'pop', 'shift', 'unshift', 'splice'].forEach((method) => {
+  arrayMethods[method] = function (...arg: any[]) {
+    const otherMethods = Array.prototype[method]
+    shouldTrack = false
+    const res = otherMethods.call(this, ...arg)
+    shouldTrack = true
+    return res
+  }
+})
+
+// set 集合映射方法
+// 定义一个对象，将自定义的 add 方法定义到该对象下
+const mutableInstrumentations = function (isShallow: boolean = false, isReadonly = false) {
+  return {
+    add(key) {
+      // this 仍然指向的是代理对象，通过 raw 属性获取原始数据对象
+      const target = this.raw
+      // 通过原始数据对象执行 add 方法添加具体的
+
+      // 判断添加的值是否存在原集合中
+      const hadKey = target.has(key)
+
+      // 注意，这里不再需要 .bind 了，因为是直接通过 target 调用并执行的
+      const res = target.add(key)
+
+      // 调用trigger函数出发响应。并指定操作类型为ADD
+      // 只有值未在集合中才会出发副作用函数
+      if (!hadKey) {
+        trigger(target, key, typeEvent.add)
+      }
+      return res
+    },
+    delete(key) {
+      // this 仍然指向的是代理对象，通过 raw 属性获取原始数据对象
+      const target = this.raw
+      // 通过原始数据对象执行 add 方法添加具体的
+
+      // 注意，这里不再需要 .bind 了，因为是直接通过 target 调用并执行的
+      const res = target.delete(key)
+
+      // 调用trigger函数出发响应。并指定操作类型为ADD
+      trigger(target, key, typeEvent.delete)
+      return res
+    },
+    get(key) {
+      // 取出原始对象
+      const target = this.raw
+
+      // 判断key是否存在于目标对象上面
+      const had = target.has(key)
+
+      if (!isShallow) {
+        track(target, key)
+      }
+
+      if (had) {
+        const res = target.get(key)
+        return typeof res === 'object' && !isReadonly ? reactive(res) : res
+      }
+    },
+    set(key, value) {
+      if (isReadonly) {
+        throw new Error('该对象是只读的！')
+      }
+      const target = this.raw
+      
+      const had = target.has(key)
+
+      // 处理响应式数据污染普通数据的问题
+      const rawValue = value.raw || value;
+      target.set(key, rawValue)
+      const oldValue = target.get(key)
+      if (!had) {
+        trigger(target, key, typeEvent.add)
+      } else if ((value !== oldValue) || (oldValue === oldValue && value === value)){
+        trigger(target, key, typeEvent.set)
+      }
+    },
+  }
+}
 
 // 创建代理对象
 export function createProxy<O extends object>(data: O, isShallow: boolean = false, isReadonly = false): O {
@@ -43,6 +125,30 @@ export function createProxy<O extends object>(data: O, isShallow: boolean = fals
       if (key === 'raw') {
         return target
       }
+
+      console.log('触发get=>', key, target);
+      // 如果触发没有key那就创建一个key来进行收集副作用函数 // 暂时无法拦截没有属性的对象直接effect函数内部使用的情况
+      // if(!key) {
+      //   track(target, OBJECT_KEY);
+      //   const res = Reflect.get(target. key, target);
+      //   console.log('结果=>', res);
+      //   return;
+      // }
+
+      // set 与 map 相关的逻辑代码
+      // 如果是 set 对象需要修正getter函数内部的this指向
+      // 如果读取的是 size 属性
+      // 通过指定第三个参数 receiver 为原始对象 target 从而修复问题
+      if (key === 'size') {
+        // 调用track函数建立响应联系
+        // 响应联系需要建立在 ITERATE_KEY 与副作用函数之间，这是因为任何新增、删除操作都会影响 size 属性。
+        track(target, ITERATE_KEY)
+        return Reflect.get(target, key, target)
+        // 将方法与原始数据对象 target 绑定后返回 set 与 map 相关的逻辑代码
+      } else if (mutableInstrumentations(isShallow, isReadonly)[key]) {
+        return mutableInstrumentations(isShallow, isReadonly)[key]
+      }
+
       if (arrayMethods[key]) {
         return Reflect.get(arrayMethods, key, receiver)
       }
@@ -53,6 +159,7 @@ export function createProxy<O extends object>(data: O, isShallow: boolean = fals
       }
 
       const res = Reflect.get(target, key, receiver)
+
       // 是否开启浅代理
       if (isShallow) {
         return res
@@ -125,12 +232,12 @@ export function createProxy<O extends object>(data: O, isShallow: boolean = fals
 
 // 收集副作用函数和代理对象之间的依赖
 export function track<T extends object, K = string>(target: T, key: K) {
-
-  if (!activeEffect) {
+  if (!activeEffect || !shouldTrack) {
     return
   }
 
   let depsMap = bucket.get(target)
+
   if (!depsMap) {
     bucket.set(target, (depsMap = new Map()))
   }
@@ -139,13 +246,14 @@ export function track<T extends object, K = string>(target: T, key: K) {
     depsMap.set(key, (deps = new Set()))
   }
   deps.add(activeEffect)
+
   activeEffect.deps.push(deps)
 }
 
 // 副作用函数和代理对象执行函数
 export function trigger<T extends object, K = string>(target: T, key: K, type?: Valueof<typeof typeEvent>, newValue?: any) {
   const depsMap = bucket.get(target)
-  // console.log('bucket=>', target, key)
+
   if (!depsMap) {
     return
   }
@@ -163,14 +271,13 @@ export function trigger<T extends object, K = string>(target: T, key: K, type?: 
     const lengthEffect = depsMap.get('length')
     lengthEffect &&
       lengthEffect.forEach((fn) => {
-        if (fn !== activeEffect) {
-          effctFn.add(fn)
-        }
+        // if (fn !== activeEffect) {
+        effctFn.add(fn)
+        // }
       })
   }
 
   if (Array.isArray(target) && key === 'length') {
-    
     depsMap.forEach((effects, key) => {
       if (key >= newValue) {
         effects.forEach((fn) => {
@@ -228,8 +335,6 @@ export function trigger<T extends object, K = string>(target: T, key: K, type?: 
   //     })
   // }
 
-
-
   // 在设置的时候把 for ... in 依赖的副作用函数取出来重新执行
   if (type === typeEvent.add || type === typeEvent.delete) {
     const InitialEffect = depsMap.get(ITERATE_KEY)
@@ -240,7 +345,6 @@ export function trigger<T extends object, K = string>(target: T, key: K, type?: 
         }
       })
   }
-
 
   effctFn &&
     effctFn.forEach((fn: Effect) => {
