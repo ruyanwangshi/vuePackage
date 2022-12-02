@@ -58,9 +58,9 @@ import { reactive } from './reactive'
   const proxy_map = reactive(new Map([['foo', s]]))
 
   effect(() => {
-    proxy_map.forEach((value, key) => {
-      console.log('item=>', value.size);
-    })
+    for(const [key,item] of proxy_map.values()){
+      console.log('item=>', item, key);
+    }
   })
-  proxy_map.get('foo').add(123)
+  proxy_map.set('foo', 213)
 }

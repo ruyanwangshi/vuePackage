@@ -11,6 +11,7 @@ const bucket = new WeakMap()
 let activeEffect: Effect
 const effectStack: Effect[] = []
 const ITERATE_KEY = Symbol()
+const ITERATE_KEYS_KEY = Symbol()
 const OBJECT_KEY = Symbol()
 
 const typeEvent = {
@@ -50,7 +51,7 @@ let shouldTrack = true
 // set 集合映射方法
 // 定义一个对象，将自定义的 add 方法定义到该对象下
 const mutableInstrumentations = function (isShallow: boolean = false, isReadonly = false) {
-  ;['entries']
+  console.log('this123=>', this)
   return {
     add(key) {
       // this 仍然指向的是代理对象，通过 raw 属性获取原始数据对象
@@ -131,30 +132,63 @@ const mutableInstrumentations = function (isShallow: boolean = false, isReadonly
         cb.call(thisArg, wrap(k), wrap(v), this)
       })
     },
+    [Symbol.iterator]: iteratorMethods,
+    entries: iteratorMethods,
+    values: () => {
+      console.log('this=>', this);
+      valueIteratorMethods('values')
+    },
+    keys: valueIteratorMethods.bind(this, 'keys'),
+  }
+}
 
-    // entries() {
-    //   // 获取原始对象
-    //   const target = this.raw
+function valueIteratorMethods(key) {
+  // 获取原始对象
+  const target = this.raw
 
-    //   const iter = target.entries()
+  const iter = target[key]()
+  if (key === 'keys') {
+    track(target, ITERATE_KEYS_KEY)
+  } else {
+    track(target, ITERATE_KEY)
+  }
+  const wrap = (v) => (typeof v === 'object' ? reactive(v) : v)
 
-    //   const wrap = (v) => (typeof v === 'object' ? reactive(v) : v)
+  return {
+    next() {
+      const { value, done } = iter.next()
+      return {
+        value: value ? wrap(value) : value,
+        done,
+      }
+    },
 
-    //   return {
-    //     [Symbol.iterator]() {
-    //       const { value, done } = iter.next()
+    [Symbol.iterator]() {
+      return this
+    },
+  }
+}
 
-    //       return {
-    //         next() {
-    //           return {
-    //             value: value ? [wrap(value[0]), wrap(value[1])] : value,
-    //             done,
-    //           }
-    //         },
-    //       }
-    //     },
-    //   }
-    // },
+function iteratorMethods() {
+  // 获取原始对象
+  const target = this.raw
+
+  const iter = target.entries()
+  track(target, ITERATE_KEY)
+  const wrap = (v) => (typeof v === 'object' ? reactive(v) : v)
+
+  return {
+    next() {
+      const { value, done } = iter.next()
+      return {
+        value: value ? [wrap(value[0]), wrap(value[1])] : value,
+        done,
+      }
+    },
+
+    [Symbol.iterator]() {
+      return this
+    },
   }
 }
 
@@ -186,7 +220,7 @@ export function createProxy<O extends object>(data: O, isShallow: boolean = fals
         return Reflect.get(target, key, target)
         // 将方法与原始数据对象 target 绑定后返回 set 与 map 相关的逻辑代码
       } else if (mutableInstrumentations(isShallow, isReadonly)[key]) {
-        return mutableInstrumentations(isShallow, isReadonly)[key]
+        return mutableInstrumentations.call(this, isShallow, isReadonly)[key]
       }
 
       if (arrayMethods[key]) {
@@ -377,10 +411,18 @@ export function trigger<T extends object, K = string>(target: T, key: K, type?: 
 
   // 在设置的时候把 for ... in 依赖的副作用函数取出来重新执行
   // 不只是单纯的普通对象的add 和 delete 还需要关心 map 对象上面的value的set
-  if ((type === typeEvent.add || type === typeEvent.delete) || (type === typeEvent.set && ({}).toString.call(target) === '[object Map]')) {
+
+  if (type === typeEvent.add || type === typeEvent.delete || (type === typeEvent.set && {}.toString.call(target) === '[object Map]')) {
     const InitialEffect = depsMap.get(ITERATE_KEY)
+    const mapKeysEffect = depsMap.get(ITERATE_KEYS_KEY)
     InitialEffect &&
       InitialEffect.forEach((fn) => {
+        if (fn !== activeEffect) {
+          effctFn.add(fn)
+        }
+      })
+    mapKeysEffect &&
+      mapKeysEffect.forEach((fn) => {
         if (fn !== activeEffect) {
           effctFn.add(fn)
         }
