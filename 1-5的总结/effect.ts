@@ -50,6 +50,7 @@ let shouldTrack = true
 // set 集合映射方法
 // 定义一个对象，将自定义的 add 方法定义到该对象下
 const mutableInstrumentations = function (isShallow: boolean = false, isReadonly = false) {
+  ;['entries']
   return {
     add(key) {
       // this 仍然指向的是代理对象，通过 raw 属性获取原始数据对象
@@ -102,19 +103,58 @@ const mutableInstrumentations = function (isShallow: boolean = false, isReadonly
         throw new Error('该对象是只读的！')
       }
       const target = this.raw
-      
+
       const had = target.has(key)
 
       // 处理响应式数据污染普通数据的问题
-      const rawValue = value.raw || value;
+      const rawValue = value.raw || value
       target.set(key, rawValue)
       const oldValue = target.get(key)
       if (!had) {
         trigger(target, key, typeEvent.add)
-      } else if ((value !== oldValue) || (oldValue === oldValue && value === value)){
+      } else if (value !== oldValue || (oldValue === oldValue && value === value)) {
         trigger(target, key, typeEvent.set)
       }
     },
+    forEach(cb, thisArg) {
+      // 获取原始对象
+      const target = this.raw
+
+      // forEach会关联对象的key的添加和删除操作的依赖关系，使用ITERATE_KEY来对这种对象进行依赖的收集操作
+      track(target, ITERATE_KEY)
+
+      // wrap 函数用来把可代理的值转换为响应式数据
+      const wrap = (v) => (typeof v === 'object' ? reactive(v) : v)
+
+      // 通过原始对象调用forEach把回调函数传进去
+      target.forEach((k, v) => {
+        cb.call(thisArg, wrap(k), wrap(v), this)
+      })
+    },
+
+    // entries() {
+    //   // 获取原始对象
+    //   const target = this.raw
+
+    //   const iter = target.entries()
+
+    //   const wrap = (v) => (typeof v === 'object' ? reactive(v) : v)
+
+    //   return {
+    //     [Symbol.iterator]() {
+    //       const { value, done } = iter.next()
+
+    //       return {
+    //         next() {
+    //           return {
+    //             value: value ? [wrap(value[0]), wrap(value[1])] : value,
+    //             done,
+    //           }
+    //         },
+    //       }
+    //     },
+    //   }
+    // },
   }
 }
 
@@ -126,7 +166,7 @@ export function createProxy<O extends object>(data: O, isShallow: boolean = fals
         return target
       }
 
-      console.log('触发get=>', key, target);
+      console.log('触发get=>', key, target)
       // 如果触发没有key那就创建一个key来进行收集副作用函数 // 暂时无法拦截没有属性的对象直接effect函数内部使用的情况
       // if(!key) {
       //   track(target, OBJECT_KEY);
@@ -336,7 +376,8 @@ export function trigger<T extends object, K = string>(target: T, key: K, type?: 
   // }
 
   // 在设置的时候把 for ... in 依赖的副作用函数取出来重新执行
-  if (type === typeEvent.add || type === typeEvent.delete) {
+  // 不只是单纯的普通对象的add 和 delete 还需要关心 map 对象上面的value的set
+  if ((type === typeEvent.add || type === typeEvent.delete) || (type === typeEvent.set && ({}).toString.call(target) === '[object Map]')) {
     const InitialEffect = depsMap.get(ITERATE_KEY)
     InitialEffect &&
       InitialEffect.forEach((fn) => {
