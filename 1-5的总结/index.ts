@@ -58,7 +58,9 @@ import { reactive } from './reactive'
   const proxy_map = reactive(new Map([['foo', s]]))
 
   effect(() => {
-    console.log('执行了副作用函数=>', proxy_map)
+    for(const [key,item] of proxy_map.values()){
+      console.log('item=>', item, key);
+    }
   })
-  proxy_map.set('foo', 123)
+  proxy_map.set('foo', 213)
 }

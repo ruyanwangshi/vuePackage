@@ -11,6 +11,7 @@ const bucket = new WeakMap()
 let activeEffect: Effect
 const effectStack: Effect[] = []
 const ITERATE_KEY = Symbol()
+const ITERATE_KEYS_KEY = Symbol()
 const OBJECT_KEY = Symbol()
 
 const typeEvent = {
@@ -50,6 +51,7 @@ let shouldTrack = true
 // set 集合映射方法
 // 定义一个对象，将自定义的 add 方法定义到该对象下
 const mutableInstrumentations = function (isShallow: boolean = false, isReadonly = false) {
+  console.log('this123=>', this)
   return {
     add(key) {
       // this 仍然指向的是代理对象，通过 raw 属性获取原始数据对象
@@ -102,18 +104,90 @@ const mutableInstrumentations = function (isShallow: boolean = false, isReadonly
         throw new Error('该对象是只读的！')
       }
       const target = this.raw
-      
+
       const had = target.has(key)
 
       // 处理响应式数据污染普通数据的问题
-      const rawValue = value.raw || value;
+      const rawValue = value.raw || value
       target.set(key, rawValue)
       const oldValue = target.get(key)
       if (!had) {
         trigger(target, key, typeEvent.add)
-      } else if ((value !== oldValue) || (oldValue === oldValue && value === value)){
+      } else if (value !== oldValue || (oldValue === oldValue && value === value)) {
         trigger(target, key, typeEvent.set)
       }
+    },
+    forEach(cb, thisArg) {
+      // 获取原始对象
+      const target = this.raw
+
+      // forEach会关联对象的key的添加和删除操作的依赖关系，使用ITERATE_KEY来对这种对象进行依赖的收集操作
+      track(target, ITERATE_KEY)
+
+      // wrap 函数用来把可代理的值转换为响应式数据
+      const wrap = (v) => (typeof v === 'object' ? reactive(v) : v)
+
+      // 通过原始对象调用forEach把回调函数传进去
+      target.forEach((k, v) => {
+        cb.call(thisArg, wrap(k), wrap(v), this)
+      })
+    },
+    [Symbol.iterator]: iteratorMethods,
+    entries: iteratorMethods,
+    values: () => {
+      console.log('this=>', this);
+      valueIteratorMethods('values')
+    },
+    keys: valueIteratorMethods.bind(this, 'keys'),
+  }
+}
+
+function valueIteratorMethods(key) {
+  // 获取原始对象
+  const target = this.raw
+
+  const iter = target[key]()
+  if (key === 'keys') {
+    track(target, ITERATE_KEYS_KEY)
+  } else {
+    track(target, ITERATE_KEY)
+  }
+  const wrap = (v) => (typeof v === 'object' ? reactive(v) : v)
+
+  return {
+    next() {
+      const { value, done } = iter.next()
+      return {
+        value: value ? wrap(value) : value,
+        done,
+      }
+    },
+
+    [Symbol.iterator]() {
+      return this
+    },
+  }
+}
+
+function iteratorMethods() {
+  // 获取原始对象
+  const target = this.raw
+
+  const iter = target.entries()
+  track(target, ITERATE_KEY)
+  const wrap = (v) => (typeof v === 'object' ? reactive(v) : v)
+
+  return {
+    next() {
+      const { value, done } = iter.next()
+      return {
+        value: value ? [wrap(value[0]), wrap(value[1])] : value,
+        done,
+      }
+    },
+
+    [Symbol.iterator]() {
+      return this
     },
   }
 }
@@ -126,7 +200,7 @@ export function createProxy<O extends object>(data: O, isShallow: boolean = fals
         return target
       }
 
-      console.log('触发get=>', key, target);
+      console.log('触发get=>', key, target)
       // 如果触发没有key那就创建一个key来进行收集副作用函数 // 暂时无法拦截没有属性的对象直接effect函数内部使用的情况
       // if(!key) {
       //   track(target, OBJECT_KEY);
@@ -146,7 +220,7 @@ export function createProxy<O extends object>(data: O, isShallow: boolean = fals
         return Reflect.get(target, key, target)
         // 将方法与原始数据对象 target 绑定后返回 set 与 map 相关的逻辑代码
       } else if (mutableInstrumentations(isShallow, isReadonly)[key]) {
-        return mutableInstrumentations(isShallow, isReadonly)[key]
+        return mutableInstrumentations.call(this, isShallow, isReadonly)[key]
       }
 
       if (arrayMethods[key]) {
@@ -336,10 +410,19 @@ export function trigger<T extends object, K = string>(target: T, key: K, type?: 
   // }
 
   // 在设置的时候把 for ... in 依赖的副作用函数取出来重新执行
-  if (type === typeEvent.add || type === typeEvent.delete) {
+  // 不只是单纯的普通对象的add 和 delete 还需要关心 map 对象上面的value的set
+
+  if (type === typeEvent.add || type === typeEvent.delete || (type === typeEvent.set && {}.toString.call(target) === '[object Map]')) {
     const InitialEffect = depsMap.get(ITERATE_KEY)
+    const mapKeysEffect = depsMap.get(ITERATE_KEYS_KEY)
     InitialEffect &&
       InitialEffect.forEach((fn) => {
+        if (fn !== activeEffect) {
+          effctFn.add(fn)
+        }
+      })
+    mapKeysEffect &&
+      mapKeysEffect.forEach((fn) => {
         if (fn !== activeEffect) {
           effctFn.add(fn)
         }
