@@ -48,10 +48,11 @@ let shouldTrack = true
   }
 })
 
+const maporSet = ['add', 'delete', 'get', 'set', 'forEach', 'entries', 'Symbol.iterator', 'entries', 'values', 'keys']
+
 // set 集合映射方法
 // 定义一个对象，将自定义的 add 方法定义到该对象下
 const mutableInstrumentations = function (isShallow: boolean = false, isReadonly = false) {
-  console.log('this123=>', this)
   return {
     add(key) {
       // this 仍然指向的是代理对象，通过 raw 属性获取原始数据对象
@@ -134,38 +135,37 @@ const mutableInstrumentations = function (isShallow: boolean = false, isReadonly
     },
     [Symbol.iterator]: iteratorMethods,
     entries: iteratorMethods,
-    values: () => {
-      console.log('this=>', this);
-      valueIteratorMethods('values')
-    },
-    keys: valueIteratorMethods.bind(this, 'keys'),
+    values: valueIteratorMethods('values'),
+    keys: valueIteratorMethods('keys'),
   }
 }
 
 function valueIteratorMethods(key) {
-  // 获取原始对象
-  const target = this.raw
+  return function () {
+    // 获取原始对象
+    const target = this.raw
 
-  const iter = target[key]()
-  if (key === 'keys') {
-    track(target, ITERATE_KEYS_KEY)
-  } else {
-    track(target, ITERATE_KEY)
-  }
-  const wrap = (v) => (typeof v === 'object' ? reactive(v) : v)
+    const iter = target[key]()
+    if (key === 'keys') {
+      track(target, ITERATE_KEYS_KEY)
+    } else {
+      track(target, ITERATE_KEY)
+    }
+    const wrap = (v) => (typeof v === 'object' ? reactive(v) : v)
 
-  return {
-    next() {
-      const { value, done } = iter.next()
-      return {
-        value: value ? wrap(value) : value,
-        done,
-      }
-    },
+    return {
+      next() {
+        const { value, done } = iter.next()
+        return {
+          value: value ? wrap(value) : value,
+          done,
+        }
+      },
 
-    [Symbol.iterator]() {
-      return this
-    },
+      [Symbol.iterator]() {
+        return this
+      },
+    }
   }
 }
 
@@ -200,7 +200,12 @@ export function createProxy<O extends object>(data: O, isShallow: boolean = fals
         return target
       }
 
-      console.log('触发get=>', key, target)
+      const value = target[key]
+      if(value.__v_isRef) {
+        return value.value
+      }
+
+      // console.log('触发get=>', receiver)
       // 如果触发没有key那就创建一个key来进行收集副作用函数 // 暂时无法拦截没有属性的对象直接effect函数内部使用的情况
       // if(!key) {
       //   track(target, OBJECT_KEY);
@@ -219,8 +224,9 @@ export function createProxy<O extends object>(data: O, isShallow: boolean = fals
         track(target, ITERATE_KEY)
         return Reflect.get(target, key, target)
         // 将方法与原始数据对象 target 绑定后返回 set 与 map 相关的逻辑代码
-      } else if (mutableInstrumentations(isShallow, isReadonly)[key]) {
-        return mutableInstrumentations.call(this, isShallow, isReadonly)[key]
+      } else if (maporSet.includes(key)) {
+        console.log()
+        return mutableInstrumentations(isShallow, isReadonly)[key]
       }
 
       if (arrayMethods[key]) {
@@ -252,6 +258,13 @@ export function createProxy<O extends object>(data: O, isShallow: boolean = fals
         throw new Error(`该对象是只读，无法对属性  ${key}  值修改！`)
       }
       const oldValue = target[key]
+
+      // 如果设置的对象是ref的话
+      if(oldValue.__v_isRef) {
+        oldValue.value = newValue
+        trigger(oldValue, 'value', typeEvent.set, newValue)
+        return true
+      }
 
       const isArray = Array.isArray(target)
 
