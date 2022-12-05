@@ -2,6 +2,7 @@
 import { effect } from './effect'
 import { reactive } from './reactive'
 import { ref, toRefs, proxyRefs } from './ref'
+import { createRenderer } from './renderer'
 // import { readonly, shallowReadonly } from './readonly'
 
 // const data = shallowReactive([1,2,3])
@@ -133,15 +134,43 @@ import { ref, toRefs, proxyRefs } from './ref'
   // objValue.foo = 321
 
 
-  const foo = ref(1)
+  // const foo = ref(1)
 
-  const test = reactive({
-    foo
-  })
+  // const test = reactive({
+  //   foo
+  // })
 
-  effect(() => {
-    console.log(test.foo)
-  })
+  // effect(() => {
+  //   console.log(test.foo)
+  // })
 
-  test.foo = 2
+  // test.foo = 2
+}
+
+// 开始渲染器
+{
+  const renderer = createRenderer()
+
+  const vnode ={
+    type: 'h1',
+    children: 'hello'
+  }
+
+  const root = {
+    type: 'div'
+  }
+
+  renderer.render(vnode, root)
+
+  // 如果是首次调用render函数的时候是挂载
+
+  // 如果多次调用而且是同一个contaienr上调用render，不光要执行挂载操作还要执行更新操作。
+  
+  // 首次渲染 比如：
+  // renderer.render(oldVNode, document.querySelector("#app"));
+
+  // 第二次渲染
+  // renderer.render(newVNode, document.querySelector("#app"));
+
+  // 这俩词执行的时候不光要执行挂载操作还要执行打补丁操作（patch）,但其实挂载也是一种特殊的补丁操作
 }
