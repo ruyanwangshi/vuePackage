@@ -1,4 +1,4 @@
-import { effect, track, trigger } from './effect'
+import { effect, track, trigger } from './effect.js'
 
 export function computed<F extends () => any>(getter: F) {
   let value: any

@@ -1,4 +1,4 @@
-import { createProxy } from './effect'
+import { createProxy } from './effect.js'
 
 const reactiveMap = new Map();
 

@@ -1,4 +1,4 @@
-import { reactive } from './reactive'
+import { reactive } from './reactive.js'
 
 // 封装一个 ref 函数
 export function ref<T>(value: T) {

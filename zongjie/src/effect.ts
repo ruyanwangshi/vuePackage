@@ -1,5 +1,5 @@
-import { reactive } from './reactive'
-import { readonly } from './readonly'
+import { reactive } from './reactive.js'
+import { readonly } from './readonly.js'
 
 type Effect = {
   (): any

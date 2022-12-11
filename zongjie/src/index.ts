@@ -1,8 +1,8 @@
 // import { effect } from './effect'
-import { effect } from './effect'
-import { reactive } from './reactive'
-import { ref, toRefs, proxyRefs } from './ref'
-import { createRenderer } from './renderer'
+import { effect } from './effect.js'
+import { reactive } from './reactive.js'
+import { ref, toRefs, proxyRefs } from './ref.js'
+import { createRenderer } from './renderer.js'
 // import { readonly, shallowReadonly } from './readonly'
 
 // const data = shallowReactive([1,2,3])
@@ -149,18 +149,30 @@ import { createRenderer } from './renderer'
 
 // 开始渲染器
 {
-  const renderer = createRenderer()
+  const renderer = createRenderer({
+    createElement(tag){
+      return document.createElement(tag);
+    },
+    setElementText(el: HTMLElement, text: string) {
+      console.log('执行了set=>', el, text)
+      el.textContent = text;
+    },
+    insert(el, parent, anchor = null) {
+      console.log('内容=>', parent)
+      parent.insertBefore(el, anchor);
+    }
+  })
 
   const vnode ={
-    type: 'h1',
+    type: 'div',
+    props: {
+      id: 'foo'
+    },
     children: 'hello'
   }
-
-  const root = {
-    type: 'div'
-  }
-
-  renderer.render(vnode, root)
+  const container = document.getElementById("#app");
+  renderer.render(vnode, container)
+  // renderer.render(null, container)
 
   // 如果是首次调用render函数的时候是挂载
 

@@ -1,4 +1,4 @@
-import { effect } from './effect'
+import { effect } from './effect.js'
 
 type IsFunction<T extends (...arg: any[]) => any> = T extends Function ? ReturnType<T> : T
 
