@@ -9,6 +9,10 @@
     "skipLibCheck": true,
     "rootDir": "./src",
     "outDir": "./dist",
-    "strict": false
-  }
+    "strict": false,
+    "paths": {
+      "@":["./src/*"]
+    },
+  },
+  "include": ["./src/*.ts"]
 }

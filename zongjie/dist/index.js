@@ -1,4 +1,3 @@
-import { createRenderer } from './renderer.js';
 // import { readonly, shallowReadonly } from './readonly'
 // const data = shallowReactive([1,2,3])
 // const child = reactive(dataobj)
@@ -110,28 +109,24 @@ import { createRenderer } from './renderer.js';
 }
 // 开始渲染器
 {
-    const renderer = createRenderer({
-        createElement(tag) {
-            return document.createElement(tag);
-        },
-        setElementText(el, text) {
-            console.log('执行了set=>', el, text);
-            el.textContent = text;
-        },
-        insert(el, parent, anchor = null) {
-            console.log('内容=>', parent);
-            parent.insertBefore(el, anchor);
-        }
-    });
-    const vnode = {
-        type: 'div',
-        props: {
-            id: 'foo'
-        },
-        children: 'hello'
-    };
-    const container = document.getElementById("#app");
-    renderer.render(vnode, container);
+    // const vnode ={
+    //   type: 'div',
+    //   props: {
+    //     id: 'foo'
+    //   },
+    //   children: [
+    //     {
+    //       type: 'div',
+    //       children: '测试'
+    //     },
+    //     {
+    //       type: 'div',
+    //       children: '测试2'
+    //     }
+    //   ]
+    // }
+    // const container = document.getElementById("#app");
+    // renderer.render(vnode, container)
     // renderer.render(null, container)
     // 如果是首次调用render函数的时候是挂载
     // 如果多次调用而且是同一个contaienr上调用render，不光要执行挂载操作还要执行更新操作。
@@ -141,3 +136,85 @@ import { createRenderer } from './renderer.js';
     // renderer.render(newVNode, document.querySelector("#app"));
     // 这俩词执行的时候不光要执行挂载操作还要执行打补丁操作（patch）,但其实挂载也是一种特殊的补丁操作
 }
+export {};
+// class的处理
+// {
+//   const vnode = {
+//     type: 'div',
+//     props: {
+//       // class: 'foo bar'
+//       // class: normalizeClass(['foo', 'bar'])
+//       // class: normalizeClass(['foo test1', {
+//       //   bar: true,
+//       //   test: true
+//       // }, 'test2'])
+//       class: normalizeClass({
+//         bar: true,
+//         test: true
+//       })
+//     },
+//     children: 'class的处理'
+//   }
+//   const container = document.getElementById("#app");
+//   renderer.render(vnode, container)
+// }
+// 卸载操作
+// {
+//   const vnode = {
+//     type: "div",
+//     props: {
+//       class: "foo"
+//     },
+//     children: "测试"
+//   }
+//   const container = document.getElementById("#app")
+//   renderer.render(vnode, container)
+//   // 如果后续调用render函数渲染空内容（即null）时
+//   renderer.render(null, container)
+// }
+// 事件的处理
+// {
+//   const vnode = {
+//     type: 'p',
+//     props: {
+//       // 使用 on 开头来描述事件
+//       onClick: [
+//         () => {
+//           console.log('测试')
+//         },
+//         () => {
+//           console.log('测试2')
+//         },
+//       ],
+//       onMouseMove: () => {
+//         console.log('鼠标移动')
+//       },
+//     },
+//     children: '测试点击事件',
+//   }
+//   const container = document.getElementById('#app')
+//   renderer.render(vnode, container)
+// }
+// 事件冒泡与更新时机问题
+// {
+//   const vnode = {
+//     type: 'p',
+//     props: {
+//       // 使用 on 开头来描述事件
+//       onClick: [
+//         () => {
+//           console.log('测试')
+//         },
+//         () => {
+//           console.log('测试2')
+//         },
+//       ],
+//       onMouseMove: () => {
+//         console.log('鼠标移动')
+//       },
+//     },
+//     children: '测试点击事件',
+//   }
+//   const container = document.getElementById('#app')
+//   renderer.render(vnode, container)
+// }

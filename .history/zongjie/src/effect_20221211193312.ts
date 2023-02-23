@@ -25,7 +25,7 @@ type Valueof<O> = O[keyof O]
 // 映射数组方法，使includes、indexOf、lastIndexOf映射成正确的对象
 const arrayMethods = {}
 
-// 一个标记变量，代表是否进行追踪。默认为true，即允许追踪
+// 一个标记变量，代表是哦福进行追踪。默认为true，即允许追踪
 let shouldTrack = true
 
 ;(['includes', 'indexOf', 'lastIndexOf'] as const).forEach((key) => {
