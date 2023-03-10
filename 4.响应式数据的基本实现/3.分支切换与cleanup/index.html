@@ -58,6 +58,7 @@
         // 再根据key取得所有副作用函数effects
         const deps = depsMap.get(key)
         if (!deps) return true
+        console.log('key', key, deps)
         // 解决Set对象如果在for循环中先删除然后再新增会出现死循环的问题
         const effectToRun = new Set(deps)
         // 执行所有副作用函数
@@ -88,6 +89,7 @@
         document.body.innerText = obj.flag ? obj.text : 'not'
       })
       obj.flag = false
+      obj.text = 'test'
       // effect(() => {
       //   console.log('effect run2')
       //   document.body.innerText = obj.flag ? obj.text : 'not'

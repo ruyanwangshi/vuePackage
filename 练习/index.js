@@ -1,24 +1,43 @@
 const bucket = new WeakMap()
 let activedEffect
+let effectStack = []
 
 const obj = {
   count: 0,
+  flag: true,
 }
 
 const data = reactive(obj)
 
 effect(() => {
-  console.log('副作用函数中的结果', data.count)
+  console.log('外层副作用函数', data.flag)
 })
 
-data.count ++
+
+
+
+// data.flag = false
+data.count++
 
 function effect(callback) {
   const effectFn = () => {
-    activedEffect = callback
+    // cleanup(effectFn)
+    // effectStack.push(effectFn)
+    activedEffect = effectFn
     callback()
+    // effectStack.pop()
+    // activedEffect = effectStack[effectStack.length - 1]
   }
+//   effectFn.deps = new Set()
   effectFn()
+}
+
+function cleanup(effect) {
+  const deps = effect.deps
+  for (const item of deps) {
+    item.delete(effect)
+  }
+  effect.deps.clear()
 }
 
 function reactive(obj) {
@@ -30,7 +49,7 @@ function reactive(obj) {
       return target[key]
     },
     set(target, key, new_val) {
-        target[key] = new_val
+      target[key] = new_val
       if (typeof key !== 'symbol') {
         trigger(target, key)
       }
@@ -41,6 +60,7 @@ function reactive(obj) {
 }
 
 function track(target, key) {
+  if (!activedEffect) return
   let depMap = bucket.get(target)
 
   if (!depMap) {
@@ -54,6 +74,7 @@ function track(target, key) {
   }
 
   deps.add(activedEffect)
+//   activedEffect && activedEffect.deps.add(deps)
 }
 
 function trigger(target, key) {
@@ -61,5 +82,6 @@ function trigger(target, key) {
   if (!depsMap) return
 
   const deps = depsMap.get(key)
-  deps && deps.forEach((fn) => fn())
+  const effectFn = new Set(deps)
+  effectFn && effectFn.forEach((fn) => fn())
 }

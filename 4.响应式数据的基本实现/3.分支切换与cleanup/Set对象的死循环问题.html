@@ -12,10 +12,10 @@
       let index = 0
       setTimeout(() => {
         set.forEach((item) => {
-          if (index < 1000) {
+        //   if (index < 1000) {
             set.delete(1) // 如果先删除，然后在添加会进入死循环
             set.add(1)
-          }
+        //   }
           index++
           console.log('函数执行中')
         })
