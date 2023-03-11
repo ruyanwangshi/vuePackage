@@ -228,7 +228,6 @@ export function createProxy(data, isShallow = false, isReadonly = false) {
             // 如果源对象属性上有该值那么就是设置，否则就是更新。
             const type = isArray ? (Number(key) >= target.length ? typeEvent.add : typeEvent.set) : Object.prototype.hasOwnProperty.call(target, key) ? typeEvent.set : typeEvent.add;
             const res = Reflect.set(target, key, newValue, receiver);
-            // console.log(newValue)
             // 如果target对象与代理对象的原始对象相等那么执行副作用函数
             if (target === receiver.raw) {
                 if (oldValue !== newValue && (newValue === newValue || oldValue === oldValue)) {

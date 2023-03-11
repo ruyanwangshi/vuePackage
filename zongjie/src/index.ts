@@ -46,15 +46,15 @@ import { test, expect } from '@jest/globals'
 // 测试map对象
 {
     // const data  = reactive(new Map([['foo', 2]]));
-    const data  = reactive([1,2,3]);
+    const data  = reactive({1:123,123:321});
     effect(() => {
-        for(const item of data.values()) {
-            console.log('结果', item)
+        for(const key in data) {
+            console.log('item=>', data[key]);
         }
         // console.log('map对象的size', data.entries())
     })
 
-    data.push(123)
+    data['123'] = 1;
 }
 
 // 如何代理set和map
