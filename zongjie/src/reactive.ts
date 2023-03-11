@@ -2,6 +2,10 @@ import { createProxy } from './effect.js'
 
 const reactiveMap = new Map();
 
+export function reactive<M extends Map<string, any>>(obj: M): M
+export function reactive<M extends Set<any>>(obj: M): M
+export function reactive<M extends object>(obj: M): M
+
 // 默认是深层次代理
 export function reactive<O extends object>(obj: O) {
   // 先去获取是否创建过代理对象

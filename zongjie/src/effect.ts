@@ -12,7 +12,7 @@ let activeEffect: Effect
 const effectStack: Effect[] = []
 const ITERATE_KEY = Symbol()
 const ITERATE_KEYS_KEY = Symbol()
-const OBJECT_KEY = Symbol()
+const MAP_SIZE_KEY = Symbol()
 
 const typeEvent = {
   set: 'set',
@@ -110,12 +110,13 @@ const mutableInstrumentations = function (isShallow: boolean = false, isReadonly
 
       // 处理响应式数据污染普通数据的问题
       const rawValue = value.raw || value
-      target.set(key, rawValue)
       const oldValue = target.get(key)
+
+      target.set(key, rawValue)
       if (!had) {
-        trigger(target, key, typeEvent.add)
-      } else if (value !== oldValue || (oldValue === oldValue && value === value)) {
-        trigger(target, key, typeEvent.set)
+        trigger(target, key, typeEvent.add, had)
+      } else if (value !== oldValue && oldValue === oldValue && value === value) {
+        trigger(target, key, typeEvent.set, had)
       }
     },
     forEach(cb, thisArg) {
@@ -151,6 +152,7 @@ function valueIteratorMethods(key) {
     } else {
       track(target, ITERATE_KEY)
     }
+    
     const wrap = (v) => (typeof v === 'object' ? reactive(v) : v)
 
     return {
@@ -199,9 +201,8 @@ export function createProxy<O extends object>(data: O, isShallow: boolean = fals
       if (key === 'raw') {
         return target
       }
-
       const value = target[key]
-      if(value.__v_isRef) {
+      if (typeof value === 'object' && value.__v_isRef) {
         return value.value
       }
 
@@ -221,11 +222,14 @@ export function createProxy<O extends object>(data: O, isShallow: boolean = fals
       if (key === 'size') {
         // 调用track函数建立响应联系
         // 响应联系需要建立在 ITERATE_KEY 与副作用函数之间，这是因为任何新增、删除操作都会影响 size 属性。
+        if ({}.toString.call(target) === '[object Map]') {
+          track(target, MAP_SIZE_KEY)
+          return Reflect.get(target, key, target)
+        }
         track(target, ITERATE_KEY)
         return Reflect.get(target, key, target)
         // 将方法与原始数据对象 target 绑定后返回 set 与 map 相关的逻辑代码
       } else if (maporSet.includes(key)) {
-        console.log()
         return mutableInstrumentations(isShallow, isReadonly)[key]
       }
 
@@ -258,9 +262,8 @@ export function createProxy<O extends object>(data: O, isShallow: boolean = fals
         throw new Error(`该对象是只读，无法对属性  ${key}  值修改！`)
       }
       const oldValue = target[key]
-
       // 如果设置的对象是ref的话
-      if(oldValue.__v_isRef) {
+      if (oldValue && oldValue.__v_isRef) {
         oldValue.value = newValue
         trigger(oldValue, 'value', typeEvent.set, newValue)
         return true
@@ -338,7 +341,7 @@ export function track<T extends object, K = string>(target: T, key: K) {
 }
 
 // 副作用函数和代理对象执行函数
-export function trigger<T extends object, K = string>(target: T, key: K, type?: Valueof<typeof typeEvent>, newValue?: any) {
+export function trigger<T extends object, K = string>(target: T, key: K, type?: Valueof<typeof typeEvent>, newValue?: any, had = false) {
   const depsMap = bucket.get(target)
 
   if (!depsMap) {
@@ -376,66 +379,38 @@ export function trigger<T extends object, K = string>(target: T, key: K, type?: 
     })
   }
 
-  // if (Array.isArray(target)) {
-  //   console.log('执行了添加add=>', type)
-  //   // 如果是数组，那么添加新元素的时候会隐式增长length属性
-  //   if (type === typeEvent.add) {
-  //     const lengthEffect = depsMap.get('length')
-  //     lengthEffect &&
-  //       lengthEffect.forEach((fn) => {
-  //         if (fn !== activeEffect) {
-  //           effctFn.add(fn)
-  //         }
-  //       })
-  //     // 如果key为length那么需要取出与length相关的所有副作用函数
-  //   } else if (key === 'length') {
-  //     depsMap.forEach((effects, key) => {
-  //       // if (key === 'length') {
-  //       //   effects.forEach((fn) => {
-  //       //     if (fn !== activeEffect) {
-  //       //       effctFn.add(fn)
-  //       //     }
-  //       //   })
-  //       // } else if (key >= newValue) {
-  //       //   effects.forEach((fn) => {
-  //       //     if (fn !== activeEffect) {
-  //       //       effctFn.add(fn)
-  //       //     }
-  //       //   })
-  //       // }
-
-  //       if (key >= newValue) {
-  //         effects.forEach((fn) => {
-  //           if (fn !== activeEffect) {
-  //             effctFn.add(fn)
-  //           }
-  //         })
-  //       }
-  //     })
-  //   }
-  // } else {
-  //   deps &&
-  //     deps.forEach((fn) => {
-  //       if (fn !== activeEffect) {
-  //         effctFn.add(fn)
-  //       }
-  //     })
-  // }
-
   // 在设置的时候把 for ... in 依赖的副作用函数取出来重新执行
   // 不只是单纯的普通对象的add 和 delete 还需要关心 map 对象上面的value的set
 
-  if (type === typeEvent.add || type === typeEvent.delete || (type === typeEvent.set && {}.toString.call(target) === '[object Map]')) {
+  if ({}.toString.call(target) === '[object Map]') {
+    if (type === typeEvent.add || type === typeEvent.delete) {
+      const MapSizeEffect = depsMap.get(MAP_SIZE_KEY)
+      MapSizeEffect &&
+        MapSizeEffect.forEach((fn) => {
+          if (fn !== activeEffect) {
+            effctFn.add(fn)
+          }
+        })
+      const mapKeysEffect = depsMap.get(ITERATE_KEYS_KEY)
+      mapKeysEffect &&
+        mapKeysEffect.forEach((fn) => {
+          if (fn !== activeEffect) {
+            effctFn.add(fn)
+          }
+        })
+    } else {
+      const InitialEffect = depsMap.get(ITERATE_KEY)
+      InitialEffect &&
+        InitialEffect.forEach((fn) => {
+          if (fn !== activeEffect) {
+            effctFn.add(fn)
+          }
+        })
+    }
+  } else {
     const InitialEffect = depsMap.get(ITERATE_KEY)
-    const mapKeysEffect = depsMap.get(ITERATE_KEYS_KEY)
     InitialEffect &&
       InitialEffect.forEach((fn) => {
-        if (fn !== activeEffect) {
-          effctFn.add(fn)
-        }
-      })
-    mapKeysEffect &&
-      mapKeysEffect.forEach((fn) => {
         if (fn !== activeEffect) {
           effctFn.add(fn)
         }

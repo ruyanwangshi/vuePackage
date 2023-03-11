@@ -1,3 +1,6 @@
+// import { effect } from './effect'
+import { effect } from './effect.js';
+import { reactive } from './reactive.js';
 // import { readonly, shallowReadonly } from './readonly'
 // const data = shallowReactive([1,2,3])
 // const child = reactive(dataobj)
@@ -28,6 +31,18 @@
 //     arr.push(1)
 //   })
 // }
+// 测试map对象
+{
+    // const data  = reactive(new Map([['foo', 2]]));
+    const data = reactive([1, 2, 3]);
+    effect(() => {
+        for (const item of data.values()) {
+            console.log('结果', item);
+        }
+        // console.log('map对象的size', data.entries())
+    });
+    data.push(123);
+}
 // 如何代理set和map
 // {
 //   {
@@ -136,7 +151,6 @@
     // renderer.render(newVNode, document.querySelector("#app"));
     // 这俩词执行的时候不光要执行挂载操作还要执行打补丁操作（patch）,但其实挂载也是一种特殊的补丁操作
 }
-export {};
 // class的处理
 // {
 //   const vnode = {
